@@ -1,0 +1,90 @@
+# Spatial plots of marker expression within a group
+
+Plots one image, with the cells of a group shaded by the (library-size
+normalised, rescaled) expression of one or two markers.
+
+## Usage
+
+``` r
+plotOneMarkerSpatial(
+  spe,
+  imageID,
+  group,
+  marker,
+  colour = "purple",
+  cellTypeTree = NULL,
+  cellSize = 1,
+  assayName = "counts"
+)
+
+plotTwoMarkerSpatial(
+  spe,
+  imageID,
+  groupA,
+  markerA,
+  colourA = "purple",
+  groupB,
+  markerB,
+  colourB = "green",
+  cellTypeTree = NULL,
+  cellSize = 1,
+  assayName = "counts"
+)
+```
+
+## Arguments
+
+- spe:
+
+  A `SummarizedExperiment` (e.g. a `SpatialExperiment`) with a cell ID,
+  cell type, image and coordinates for every cell in the form given by
+  [`getCellData()`](https://shreyarajeshrao.github.io/fuzzyCell/reference/getCellData.md),
+  and a counts assay.
+
+- imageID:
+
+  The image to plot.
+
+- group, groupA, groupB:
+
+  Group name(s) whose cells are shaded.
+
+- marker, markerA, markerB:
+
+  Gene name(s), which must be rows of the assay.
+
+- colour, colourA, colourB:
+
+  Colour(s) used for the shading.
+
+- cellTypeTree:
+
+  A cell type tree, used to find the cells of each group. It is needed
+  unless `colData(spe)` already has a `group` column.
+
+- cellSize:
+
+  Size of the highlighted cells, the ones drawn in colour. The grey
+  background cells always have size 0.7.
+
+- assayName:
+
+  Name of the assay with the counts. Expression is normalised by each
+  cell's library size.
+
+## Value
+
+A `ggplot` object.
+
+## Examples
+
+``` r
+data(lungSubset)
+data(lungCellTypeTree)
+plotOneMarkerSpatial(lungSubset, "VUHD113", "Endothelial lineage", "HEY1",
+    cellTypeTree = lungCellTypeTree)
+
+plotTwoMarkerSpatial(lungSubset, "VUHD113", "Endothelial lineage", "PECAM1",
+    "purple", "Fibroblast lineage", "COL1A1", "green",
+    cellTypeTree = lungCellTypeTree)
+```
