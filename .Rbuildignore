@@ -11,3 +11,6 @@
 ^TEST\.knit\.md$
 ^\.quarto$
 ^\.git$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

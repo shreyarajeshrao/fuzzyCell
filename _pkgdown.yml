@@ -1,0 +1,38 @@
+url: https://shreyarajeshrao.github.io/fuzzyCell/
+
+template:
+  bootstrap: 5
+
+reference:
+  - title: Cell-type trees
+    contents:
+      - cellTypeTree
+  - title: Classification confidence
+    contents:
+      - bootstrapLineageConfidence
+      - bootstrapClassify
+      - crossfitLineageProbabilities
+      - confidenceWeights
+  - title: Proportions and co-localisation
+    contents:
+      - runProportionsPipeline
+      - runColocalisationModels
+      - plotProportionBoxplot
+      - plotMetricBoxplot
+  - title: Niches
+    contents:
+      - nicheIdentification
+      - testNicheOutcome
+      - nichePlots
+  - title: Spatial plots
+    contents:
+      - plotSpatial
+      - plotMarkerSpatial
+  - title: Data
+    contents:
+      - getCellData
+      - loadAmancherla
+      - lungSubset
+      - lungCellTypeTree
+      - lungConfList
+      - heartCellTypeTree

@@ -18,7 +18,7 @@ Description: Cell type labels in spatial single-cell data are
     lineages, groups and subtypes. Helpers for testing against sample-level
     outcomes and for plotting are included.
 License: GPL (>= 3)
-URL: https://github.com/shreyarajeshrao/fuzzyCell
+URL: https://github.com/shreyarajeshrao/fuzzyCell, https://shreyarajeshrao.github.io/fuzzyCell/
 BugReports: https://github.com/shreyarajeshrao/fuzzyCell/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
