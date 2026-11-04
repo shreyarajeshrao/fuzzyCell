@@ -14,6 +14,7 @@ Cell type labels in spatial single-cell data are uncertain, particularly between
 Useful links:
 \itemize{
   \item \url{https://github.com/shreyarajeshrao/fuzzyCell}
+  \item \url{https://shreyarajeshrao.github.io/fuzzyCell/}
   \item Report bugs at \url{https://github.com/shreyarajeshrao/fuzzyCell/issues}
 }
 
