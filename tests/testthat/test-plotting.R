@@ -1,41 +1,52 @@
-d = miniPipelineData()
-quiet = function(x) suppressWarnings(suppressMessages(x))
+d <- miniPipelineData()
 
 # a tree with two groups, so that two groups can be plotted together
-tree2 = list(G = list(children = c("A", "B")), H = list(children = c("C", "D")))
-cells = getCellData(d$spe)
-cc = cells[cells$cellType == "C", ]
-conf = list(G = d$conf$G, H = data.frame(cellID = cc$cellID, C = 1, D = 0))
-niches = quiet(runNicheIdentification(d$spe, d$tree, d$conf, r = c(20, 50), k = 3))
-spe = d$spe
-spe$nicheWeighted = niches$nicheWeighted[spe$cellID]
+tree2 <- list(G = list(children = c("A", "B")), H = list(children = c("C",
+    "D")))
+cells <- getCellData(d$spe)
+cc <- cells[cells$cellType == "C", ]
+conf <- list(G = d$conf$G, H = data.frame(cellID = cc$cellID, C = 1, D = 0))
+niches <- quiet(runNicheIdentification(d$spe, d$tree, d$conf, r = c(20, 50),
+    k = 3))
+spe <- d$spe
+spe$nicheWeighted <- niches$nicheWeighted[spe$cellID]
 
 # the plots that draw individual cells, each as a function of cellSize
-cellPlots = list(
-    plotOriginalLabelSpatial = function(...) plotOriginalLabelSpatial(spe, tree2, "img1", "G", ...),
-    plotHardSpatialPair = function(...) plotHardSpatialPair(spe, "img1", "A", "B", tree2, ...),
-    plotWeightedSpatial = function(...) plotWeightedSpatial(spe, tree2, conf, "img1", "G", "A", ...),
-    plotWeightedSpatialPair_alpha = function(...) plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A", "H", "C", ...),
-    plotWeightedSpatialPair_colour = function(...) plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A", "H", "C", encoding = "colour", ...),
-    plotOneMarkerSpatial = function(...) plotOneMarkerSpatial(spe, "img1", "G", "g1", cellTypeTree = tree2, ...),
-    plotTwoMarkerSpatial = function(...) plotTwoMarkerSpatial(spe, "img1", "G", "g1", "purple", "H", "g4", "green", cellTypeTree = tree2, ...),
-    plotNicheSpatial = function(...) plotNicheSpatial(spe, "img1", "niche1", ...)
+cellPlots <- list(
+    plotOriginalLabelSpatial = function(...) plotOriginalLabelSpatial(spe,
+        tree2, "img1", "G", ...),
+    plotHardSpatialPair = function(...) plotHardSpatialPair(spe, tree2, "img1",
+        "A", "B", ...),
+    plotWeightedSpatial = function(...) plotWeightedSpatial(spe, tree2, conf,
+        "img1", "G", "A", ...),
+    plotWeightedSpatialPair_alpha = function(...) plotWeightedSpatialPair(spe,
+        tree2, conf, "img1", "G", "A", "H", "C", ...),
+    plotWeightedSpatialPair_colour = function(...) plotWeightedSpatialPair(spe,
+        tree2, conf, "img1", "G", "A", "H", "C", encoding = "colour", ...),
+    plotOneMarkerSpatial = function(...) plotOneMarkerSpatial(spe, tree2,
+        "img1", "G", "g1", ...),
+    plotTwoMarkerSpatial = function(...) plotTwoMarkerSpatial(spe, tree2,
+        "img1", "G", "g1", "purple", "H", "g4", "green", ...),
+    plotNicheSpatial = function(...) plotNicheSpatial(spe, "img1", "niche1",
+        ...)
 )
 
 # point size of every layer of a plot, background layer first
-layerSizes = function(p) {
+layerSizes <- function(p) {
     ggplot2::ggplot_build(p)
     unname(vapply(p$layers, function(l) l$aes_params$size, numeric(1)))
 }
 
 test_that("every plot takes a SummarizedExperiment", {
-    plots = list(
+    plots <- list(
         function(x) plotOriginalLabelSpatial(x, tree2, "img1", "G"),
-        function(x) plotHardSpatialPair(x, "img1", "A", "B", tree2),
+        function(x) plotHardSpatialPair(x, tree2, "img1", "A", "B"),
         function(x) plotWeightedSpatial(x, tree2, conf, "img1", "G", "A"),
-        function(x) plotWeightedSpatialPair(x, tree2, conf, "img1", "G", "A", "H", "C"),
-        function(x) plotOneMarkerSpatial(x, "img1", "G", "g1", cellTypeTree = tree2),
-        function(x) plotTwoMarkerSpatial(x, "img1", "G", "g1", "purple", "H", "g4", "green", cellTypeTree = tree2),
+        function(x) plotWeightedSpatialPair(x, tree2, conf, "img1", "G", "A",
+            "H", "C"),
+        function(x) plotOneMarkerSpatial(x, tree2, "img1", "G", "g1"),
+        function(x) plotTwoMarkerSpatial(x, tree2, "img1", "G", "g1", "purple",
+            "H", "g4", "green"),
         function(x) plotNicheSpatial(x, "img1", "niche1"),
         function(x) nicheCompositionMap(x, "nicheWeighted"),
         function(x) nicheBarplot(x, "nicheWeighted", "niche1")
@@ -51,7 +62,7 @@ test_that("every plot takes a SummarizedExperiment", {
 
 test_that("highlighted cells have size 1 and the grey background 0.7 by default", {
     for (nm in names(cellPlots)) {
-        sizes = layerSizes(cellPlots[[nm]]())
+        sizes <- layerSizes(cellPlots[[nm]]())
         expect_equal(sizes[1], 0.7, info = nm)
         expect_true(all(sizes[-1] == 1), info = nm)
         expect_gt(length(sizes), 1)
@@ -60,7 +71,7 @@ test_that("highlighted cells have size 1 and the grey background 0.7 by default"
 
 test_that("cellSize sets the size of the highlighted cells only", {
     for (nm in names(cellPlots)) {
-        sizes = layerSizes(cellPlots[[nm]](cellSize = 2.5))
+        sizes <- layerSizes(cellPlots[[nm]](cellSize = 2.5))
         expect_equal(sizes[1], 0.7, info = nm)
         expect_true(all(sizes[-1] == 2.5), info = nm)
     }
@@ -75,73 +86,88 @@ test_that("cellSize must be a single positive number", {
     }
 })
 
-test_that("plots use the data in colData even when it has its own group column", {
+test_that("plots use the data in colData even when it has its own group column",
+    {
     # a dataset that already has `group` and `lineage` columns of its own
-    own = spe
-    own$group = "mine"
-    own$lineage = "mine"
+    own <- spe
+    own$group <- "mine"
+    own$lineage <- "mine"
     expect_no_message(plotOriginalLabelSpatial(own, tree2, "img1", "G"))
     expect_no_message(plotWeightedSpatial(own, tree2, conf, "img1", "G", "A"))
 })
 
 test_that("plotWeightedSpatialPair has a separate legend for each cell type", {
     for (enc in c("alpha", "colour")) {
-        p = plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A", "H", "C",
+        p <- plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A", "H",
+            "C",
             encoding = enc)
-        scaleNames = vapply(p$scales$scales, function(s) {
+        scaleNames <- vapply(p$scales$scales, function(s) {
             if (is.character(s$name)) s$name[1] else NA_character_
         }, character(1))
         expect_true("A\nconfidence" %in% scaleNames, info = enc)
         expect_true("C\nconfidence" %in% scaleNames, info = enc)
     }
     # alpha is the default encoding
-    p = plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A", "H", "C")
+    p <- plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A", "H", "C")
     expect_true(any(grepl("^alpha", vapply(p$scales$scales,
         function(s) s$aesthetics[1], ""))))
 })
 
-## ---- marker plots read the counts from an assay of spe ------------------------
-test_that("the marker plots give the same picture for sparse and dense counts", {
-    sparse = spe
-    SummarizedExperiment::assay(sparse, "counts") = as(SummarizedExperiment::assay(spe, "counts"), "CsparseMatrix")
-    layerData = function(p) lapply(ggplot2::ggplot_build(p)$data, function(l) l[, setdiff(names(l), "group")])
-    expect_equal(layerData(plotOneMarkerSpatial(sparse, "img1", "G", "g1", cellTypeTree = tree2)),
-        layerData(plotOneMarkerSpatial(spe, "img1", "G", "g1", cellTypeTree = tree2)))
-    expect_equal(layerData(plotTwoMarkerSpatial(sparse, "img1", "G", "g1", "purple", "H", "g4", "green", cellTypeTree = tree2)),
-        layerData(plotTwoMarkerSpatial(spe, "img1", "G", "g1", "purple", "H", "g4", "green", cellTypeTree = tree2)))
+## ---- marker plots read the counts from an assay of spe
+## ------------------------
+test_that("the marker plots give the same picture for sparse and dense counts",
+    {
+    sparse <- spe
+    SummarizedExperiment::assay(sparse,
+        "counts") <- as(SummarizedExperiment::assay(spe,
+        "counts"), "CsparseMatrix")
+    layerData <- function(p) lapply(ggplot2::ggplot_build(p)$data,
+        function(l) l[, setdiff(names(l), "group")])
+    expect_equal(layerData(plotOneMarkerSpatial(sparse, tree2, "img1", "G",
+        "g1")),
+        layerData(plotOneMarkerSpatial(spe, tree2, "img1", "G", "g1")))
+    expect_equal(layerData(plotTwoMarkerSpatial(sparse, tree2, "img1", "G",
+        "g1", "purple", "H", "g4", "green")),
+        layerData(plotTwoMarkerSpatial(spe, tree2, "img1", "G", "g1", "purple",
+            "H", "g4", "green")))
 })
 
 test_that("the marker plots take their counts from the assay of spe", {
     # a second assay with different counts is used when asked for
-    other = spe
-    SummarizedExperiment::assay(other, "doubled") = 2 * SummarizedExperiment::assay(spe, "counts")
-    expect_no_error(plotOneMarkerSpatial(other, "img1", "G", "g1",
-        cellTypeTree = tree2, assayName = "doubled"))
-    expect_error(plotOneMarkerSpatial(spe, "img1", "G", "g1", cellTypeTree = tree2,
+    other <- spe
+    SummarizedExperiment::assay(other,
+        "doubled") <- 2 * SummarizedExperiment::assay(spe, "counts")
+    expect_no_error(plotOneMarkerSpatial(other, tree2, "img1", "G", "g1",
+        assayName = "doubled"))
+    expect_error(plotOneMarkerSpatial(spe, tree2, "img1", "G", "g1",
         assayName = "logcounts"),
         "`assayName = \"logcounts\"` is not an assay of spe. Available assays: counts")
-    expect_error(plotTwoMarkerSpatial(spe, "img1", "G", "g1", "purple", "H", "g4",
-        "green", cellTypeTree = tree2, assayName = 1),
+    expect_error(plotTwoMarkerSpatial(spe, tree2, "img1", "G", "g1", "purple",
+        "H", "g4",
+        "green", assayName = 1),
         "`assayName` must be a single string")
 })
 
 test_that("the marker plots check the genes", {
-    expect_error(plotOneMarkerSpatial(spe, "img1", "G", "nogene", cellTypeTree = tree2),
+    expect_error(plotOneMarkerSpatial(spe, tree2, "img1", "G", "nogene"),
         "`marker = \"nogene\"` is not a gene \\(a row\\) of the 'counts' assay")
-    expect_error(plotOneMarkerSpatial(spe, "img1", "G", c("g1", "g2"), cellTypeTree = tree2),
+    expect_error(plotOneMarkerSpatial(spe, tree2, "img1", "G", c("g1", "g2")),
         "`marker` must be a single string naming a gene")
-    expect_error(plotTwoMarkerSpatial(spe, "img1", "G", "g1", "purple", "H", "nogene",
-        "green", cellTypeTree = tree2), "`markerB = \"nogene\"` is not a gene")
+    expect_error(plotTwoMarkerSpatial(spe, tree2, "img1", "G", "g1", "purple",
+        "H", "nogene",
+        "green"), "`markerB = \"nogene\"` is not a gene")
 })
 
 test_that("the marker plots need a tree to find the groups", {
-    expect_error(plotOneMarkerSpatial(spe, "img1", "G", "g1"),
+    expect_error(plotOneMarkerSpatial(spe, NULL, "img1", "G", "g1"),
         "`cellTypeTree` is needed to find the cells of the group")
-    expect_error(plotTwoMarkerSpatial(spe, "img1", "G", "g1", "purple", "H", "g4", "green"),
+    expect_error(plotTwoMarkerSpatial(spe, NULL, "img1", "G", "g1", "purple",
+        "H", "g4", "green"),
         "`cellTypeTree` is needed to find the cells of the groups")
 })
 
-## ---- niche plots ----------------------------------------------------------------
+## ---- niche plots
+## ----------------------------------------------------------------
 test_that("the niche plots check their columns and niche", {
     expect_error(plotNicheSpatial(spe, "img1", "niche1", nicheCol = "nope"),
         "`nicheCol = \"nope\"` is not a column of the data")
@@ -154,11 +180,15 @@ test_that("the niche plots check their columns and niche", {
 })
 
 test_that("the niche plots take a named niche vector as well as a column", {
-    vec = niches$nicheWeighted
-    expect_equal(nicheCompositionMap(spe, vec)$data, nicheCompositionMap(spe, "nicheWeighted")$data)
-    expect_equal(nicheBarplot(spe, vec, "niche1")$data, nicheBarplot(spe, "nicheWeighted", "niche1")$data)
-    expect_equal(lapply(plotNicheSpatial(spe, "img1", "niche1", nicheCol = vec)$layers, function(l) nrow(l$data)),
-        lapply(plotNicheSpatial(spe, "img1", "niche1")$layers, function(l) nrow(l$data)))
+    vec <- niches$nicheWeighted
+    expect_equal(nicheCompositionMap(spe, vec)$data, nicheCompositionMap(spe,
+        "nicheWeighted")$data)
+    expect_equal(nicheBarplot(spe, vec, "niche1")$data, nicheBarplot(spe,
+        "nicheWeighted", "niche1")$data)
+    expect_equal(lapply(plotNicheSpatial(spe, "img1", "niche1",
+        nicheCol = vec)$layers, function(l) nrow(l$data)),
+        lapply(plotNicheSpatial(spe, "img1", "niche1")$layers,
+            function(l) nrow(l$data)))
     expect_error(nicheCompositionMap(spe, c(a = "niche1")),
         "`niche` must be a column of the data or a vector of niches named by cell ID")
     expect_error(plotNicheSpatial(spe, "img1", "niche9", nicheCol = vec),
@@ -167,25 +197,32 @@ test_that("the niche plots take a named niche vector as well as a column", {
 
 test_that("the interactive plots embed no font files", {
     skip_if_not_installed("ggiraph")
-    w = fuzzyCell:::interactivePlot(ggplot2::ggplot(cells, ggplot2::aes(x, y)) + ggplot2::geom_point())
-    deps = unlist(lapply(w$dependencies, function(d) d$name))
+    skip_if_not_installed("gdtools")
+    w <- fuzzyCell:::interactivePlot(ggplot2::ggplot(cells, ggplot2::aes(x,
+        y)) + ggplot2::geom_point())
+    deps <- unlist(lapply(w$dependencies, function(d) d$name))
     expect_false(any(grepl("liberation|font", deps)))
-    expect_match(w$x$html, "font-family='Liberation Sans, Arial, Helvetica, sans-serif'", fixed = TRUE)
+    expect_match(w$x$html,
+        "font-family='Liberation Sans, Arial, Helvetica, sans-serif'", fixed = TRUE)
     expect_false(grepl("font-family='Liberation Sans'", w$x$html, fixed = TRUE))
 })
 
-## ---- plotMetricBoxplot ----------------------------------------------------------
+## ---- plotMetricBoxplot
+## ----------------------------------------------------------
 test_that("plotMetricBoxplot takes lfunction or kontextual", {
     skip_if_not_installed("ggiraph")
-    res = quiet(runColocalisationModels(d$spe, d$tree, d$conf, "outcome"))
+    skip_if_not_installed("gdtools")
+    res <- quiet(runColocalisationModels(d$spe, d$tree, d$conf, "outcome"))
     for (metric in c("lfunction", "kontextual")) {
-        # relative to G = {A, B}, A -> B has no randomness under the hard-label null; C -> A has
-        p = plotMetricBoxplot(res, d$spe, "C", "A", "outcome", metric = metric)
+        # relative to G = {A, B}, A -> B has no randomness under the
+        # hard-label null; C -> A has
+        p <- plotMetricBoxplot(res, d$spe, "C", "A", "outcome", metric = metric)
         expect_s3_class(p, "girafe")
 
         # boxplots and points, with no lines joining the points
-        gg = fuzzyCell:::metricBoxplotGG(res, cells, "C", "A", "outcome", metric)
-        geoms = vapply(gg$layers, function(l) class(l$geom)[1], "")
+        gg <- fuzzyCell:::metricBoxplotGG(res, cells, "C", "A", "outcome",
+            metric)
+        geoms <- vapply(gg$layers, function(l) class(l$geom)[1], "")
         expect_gt(length(geoms), 0)
         expect_true("GeomBoxplot" %in% geoms)
         expect_false("GeomLine" %in% geoms)
@@ -201,32 +238,35 @@ test_that("plotMetricBoxplot takes lfunction or kontextual", {
 })
 
 test_that("the removed plot functions are no longer exported", {
-    exports = getNamespaceExports("fuzzyCell")
+    exports <- getNamespaceExports("fuzzyCell")
     expect_false("plotConfidenceMarkers" %in% exports)
     expect_false("plotPValComparison" %in% exports)
     expect_true("testNicheOutcome" %in% exports)
 })
 
-## ---- plotProportionBoxplot ------------------------------------------------------
+## ---- plotProportionBoxplot
+## ------------------------------------------------------
 test_that("plotProportionBoxplot handles both proportion pipelines", {
     skip_if_not_installed("ggiraph")
-    pipelines = list(
+    skip_if_not_installed("gdtools")
+    pipelines <- list(
         all = quiet(runProportionsPipeline(d$spe, d$tree, d$conf, "outcome")),
         parent = quiet(runProportionsRelativeToParentPipeline(d$spe, d$tree,
             d$conf, "outcome"))
     )
     for (nm in names(pipelines)) {
-        res = pipelines[[nm]]
-        p = plotProportionBoxplot(res, "A", d$spe, "outcome")
+        res <- pipelines[[nm]]
+        p <- plotProportionBoxplot(res, "A", d$spe, "outcome")
         expect_s3_class(p, "girafe")
 
-        gg = fuzzyCell:::proportionBoxplotGG(res, "A", cells, "outcome")
-        geoms = vapply(gg$layers, function(l) class(l$geom)[1], "")
+        gg <- fuzzyCell:::proportionBoxplotGG(res, "A", cells, "outcome")
+        geoms <- vapply(gg$layers, function(l) class(l$geom)[1], "")
         expect_true("GeomBoxplot" %in% geoms, info = nm)
         expect_false("GeomLine" %in% geoms, info = nm)
         # one point per image and weighting
         expect_equal(nrow(gg$data), 2 * 6, info = nm)
-        expect_equal(levels(gg$data$type), c("Unweighted", "Weighted"), info = nm)
+        expect_equal(levels(gg$data$type), c("Unweighted", "Weighted"),
+            info = nm)
     }
     # the axis says what the proportion is of
     expect_equal(fuzzyCell:::proportionBoxplotGG(pipelines$all, "A", cells,
@@ -240,7 +280,8 @@ test_that("plotProportionBoxplot handles both proportion pipelines", {
 
 test_that("plotProportionBoxplot checks its arguments", {
     skip_if_not_installed("ggiraph")
-    res = quiet(runProportionsPipeline(d$spe, d$tree, d$conf, "outcome"))
+    skip_if_not_installed("gdtools")
+    res <- quiet(runProportionsPipeline(d$spe, d$tree, d$conf, "outcome"))
     expect_error(plotProportionBoxplot(list(), "A", d$spe, "outcome"),
         "`results` must be the output of runProportionsPipeline")
     expect_error(plotProportionBoxplot(res$proportions, "A", d$spe, "outcome"),
@@ -255,60 +296,76 @@ test_that("plotProportionBoxplot checks its arguments", {
         "`spe` must be a SummarizedExperiment")
 })
 
-## ---- nicheProportionBoxplot -----------------------------------------------------
+## ---- nicheProportionBoxplot
+## -----------------------------------------------------
 test_that("nicheProportionBoxplot plots the table it is given", {
     skip_if_not_installed("ggiraph")
-    tests = quiet(testNicheOutcome(spe, niches$nicheUnweighted, niches$nicheWeighted,
+    skip_if_not_installed("gdtools")
+    tests <- quiet(testNicheOutcome(spe, niches$nicheUnweighted,
+        niches$nicheWeighted,
         "outcome"))
     for (type in c("weighted", "unweighted")) {
-        props = tests[[paste0("prop", tools::toTitleCase(type))]]
+        props <- tests[[paste0("prop", tools::toTitleCase(type))]]
         expect_equal(attr(props, "nicheType"), type)
-        expect_s3_class(nicheProportionBoxplot(props, "niche1", spe, "outcome"), "girafe")
+        expect_s3_class(nicheProportionBoxplot(props, "niche1", spe, "outcome"),
+            "girafe")
 
         # the table decides which niches are plotted, and the title says which
-        gg = fuzzyCell:::nicheProportionBoxplotGG(props, "niche1", cells, "outcome")
+        gg <- fuzzyCell:::nicheProportionBoxplotGG(props, "niche1", cells,
+            "outcome")
         expect_equal(gg$labels$title, paste0("niche1 (", type, ")"))
         expect_equal(nrow(gg$data), sum(props$niche == "niche1"))
-        geoms = vapply(gg$layers, function(l) class(l$geom)[1], "")
+        geoms <- vapply(gg$layers, function(l) class(l$geom)[1], "")
         expect_true("GeomBoxplot" %in% geoms)
     }
     # there is no weighted argument any more
     expect_false("weighted" %in% names(formals(nicheProportionBoxplot)))
 
     # the two tables really are different plots
-    w = fuzzyCell:::nicheProportionBoxplotGG(tests$propWeighted, "niche1", cells, "outcome")
-    u = fuzzyCell:::nicheProportionBoxplotGG(tests$propUnweighted, "niche1", cells, "outcome")
+    w <- fuzzyCell:::nicheProportionBoxplotGG(tests$propWeighted, "niche1",
+        cells, "outcome")
+    u <- fuzzyCell:::nicheProportionBoxplotGG(tests$propUnweighted, "niche1",
+        cells, "outcome")
     expect_false(isTRUE(all.equal(w$data$proportion, u$data$proportion)) &&
         w$labels$title == u$labels$title)
 })
 
 test_that("nicheProportionBoxplot checks its arguments", {
     skip_if_not_installed("ggiraph")
-    tests = quiet(testNicheOutcome(spe, niches$nicheUnweighted, niches$nicheWeighted,
+    skip_if_not_installed("gdtools")
+    tests <- quiet(testNicheOutcome(spe, niches$nicheUnweighted,
+        niches$nicheWeighted,
         "outcome"))
-    msg = "`proportions` must be the `propWeighted` or `propUnweighted` element of the results of testNicheOutcome\\(\\)"
+    msg <- "`proportions` must be the `propWeighted` or `propUnweighted` element of the results of testNicheOutcome\\(\\)"
     # the whole result list is no longer accepted
     expect_error(nicheProportionBoxplot(tests, "niche1", spe, "outcome"), msg)
     expect_error(nicheProportionBoxplot(NULL, "niche1", spe, "outcome"), msg)
-    expect_error(nicheProportionBoxplot(data.frame(a = 1), "niche1", spe, "outcome"), msg)
-    expect_error(nicheProportionBoxplot(tests$propWeighted, "niche99", spe, "outcome"),
+    expect_error(nicheProportionBoxplot(data.frame(a = 1), "niche1", spe,
+        "outcome"), msg)
+    expect_error(nicheProportionBoxplot(tests$propWeighted, "niche99", spe,
+        "outcome"),
         "`niche` must be one of the niches in `proportions`: niche1, niche2, niche3")
-    expect_error(nicheProportionBoxplot(tests$propWeighted, "niche1", cells, "outcome"),
+    expect_error(nicheProportionBoxplot(tests$propWeighted, "niche1", cells,
+        "outcome"),
         "`spe` must be a SummarizedExperiment")
-    expect_error(nicheProportionBoxplot(tests$propWeighted, "niche1", spe, "nope"),
+    expect_error(nicheProportionBoxplot(tests$propWeighted, "niche1", spe,
+        "nope"),
         "`outcomeCol = \"nope\"` is not a column of the data")
 })
 
-## ---- the image, groups, subtypes, niche and pair are checked ---------------------
+## ---- the image, groups, subtypes, niche and pair are checked
+## ---------------------
 test_that("every single-image plot checks that the image exists", {
-    msg = "`imageID = \"img99\"` is not an image in the data. Images: img1, img2, img3, img4, img5, img6"
+    msg <- "`imageID = \"img99\"` is not an image in the data. Images: img1, img2, img3, img4, img5, img6"
     expect_error(plotOriginalLabelSpatial(spe, tree2, "img99", "G"), msg)
-    expect_error(plotHardSpatialPair(spe, "img99", "A", "B", tree2), msg)
+    expect_error(plotHardSpatialPair(spe, tree2, "img99", "A", "B"), msg)
     expect_error(plotWeightedSpatial(spe, tree2, conf, "img99", "G", "A"), msg)
-    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img99", "G", "A", "H", "C"), msg)
-    expect_error(plotOneMarkerSpatial(spe, "img99", "G", "g1", cellTypeTree = tree2), msg)
-    expect_error(plotTwoMarkerSpatial(spe, "img99", "G", "g1", "purple", "H", "g4",
-        "green", cellTypeTree = tree2), msg)
+    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img99", "G", "A",
+        "H", "C"), msg)
+    expect_error(plotOneMarkerSpatial(spe, tree2, "img99", "G", "g1"), msg)
+    expect_error(plotTwoMarkerSpatial(spe, tree2, "img99", "G", "g1", "purple",
+        "H", "g4",
+        "green"), msg)
     expect_error(plotNicheSpatial(spe, "img99", "niche1"), msg)
     expect_error(plotOriginalLabelSpatial(spe, tree2, c("img1", "img2"), "G"),
         "`imageID` must be a single string")
@@ -317,45 +374,55 @@ test_that("every single-image plot checks that the image exists", {
 })
 
 test_that("groups are checked against the data", {
-    msg = function(arg, value) paste0("`", arg, " = \"", value,
+    msg <- function(arg, value) paste0("`", arg, " = \"", value,
         "\"` is not a group in the data. Groups: G, H")
-    expect_error(plotOriginalLabelSpatial(spe, tree2, "img1", "GG"), msg("targetGroup", "GG"))
-    expect_error(plotWeightedSpatial(spe, tree2, conf, "img1", "GG", "A"), msg("targetGroup", "GG"))
-    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A", "HH", "C"),
+    expect_error(plotOriginalLabelSpatial(spe, tree2, "img1", "GG"),
+        msg("targetGroup", "GG"))
+    expect_error(plotWeightedSpatial(spe, tree2, conf, "img1", "GG", "A"),
+        msg("targetGroup", "GG"))
+    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A",
+        "HH", "C"),
         msg("groupB", "HH"))
-    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img1", "Gx", "A", "HH", "C"),
+    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img1", "Gx", "A",
+        "HH", "C"),
         msg("groupA", "Gx"))
-    expect_error(plotOneMarkerSpatial(spe, "img1", "GG", "g1", cellTypeTree = tree2),
+    expect_error(plotOneMarkerSpatial(spe, tree2, "img1", "GG", "g1"),
         msg("group", "GG"))
-    expect_error(plotTwoMarkerSpatial(spe, "img1", "G", "g1", "purple", "HH", "g4",
-        "green", cellTypeTree = tree2), msg("groupB", "HH"))
+    expect_error(plotTwoMarkerSpatial(spe, tree2, "img1", "G", "g1", "purple",
+        "HH", "g4",
+        "green"), msg("groupB", "HH"))
     # a cell type is not a group
-    expect_error(plotOriginalLabelSpatial(spe, tree2, "img1", "A"), msg("targetGroup", "A"))
+    expect_error(plotOriginalLabelSpatial(spe, tree2, "img1", "A"),
+        msg("targetGroup", "A"))
     expect_error(plotOriginalLabelSpatial(spe, tree2, "img1", c("G", "H")),
         "`targetGroup` must be a single group name")
-    # a group of the tree without any cells in the data is not a group of the data
-    emptyTree = list(G = list(children = c("A", "B")), H = list(children = c("X", "Y")))
+    # a group of the tree without any cells in the data is not a group of
+    # the data
+    emptyTree <- list(G = list(children = c("A", "B")),
+        H = list(children = c("X", "Y")))
     expect_error(plotOriginalLabelSpatial(spe, emptyTree, "img1", "H"),
         "`targetGroup = \"H\"` is not a group in the data. Groups: G")
 })
 
 test_that("labels of plotHardSpatialPair can be cell types or groups, and must exist", {
-    expect_no_error(plotHardSpatialPair(spe, "img1", "A", "H", tree2))
-    expect_no_error(plotHardSpatialPair(spe, "img1", "G", "C", tree2))
-    expect_error(plotHardSpatialPair(spe, "img1", "A", "Typo", tree2),
+    expect_no_error(plotHardSpatialPair(spe, tree2, "img1", "A", "H"))
+    expect_no_error(plotHardSpatialPair(spe, tree2, "img1", "G", "C"))
+    expect_error(plotHardSpatialPair(spe, tree2, "img1", "A", "Typo"),
         "`subtypeB = \"Typo\"` is neither a cell type nor a group in the data")
-    expect_error(plotHardSpatialPair(spe, "img1", "Typo", "B", tree2),
+    expect_error(plotHardSpatialPair(spe, tree2, "img1", "Typo", "B"),
         "`subtypeA = \"Typo\"` is neither a cell type nor a group in the data")
-    expect_error(plotHardSpatialPair(spe, "img1", c("A", "B"), "B", tree2),
+    expect_error(plotHardSpatialPair(spe, tree2, "img1", c("A", "B"), "B"),
         "`subtypeA` must be a single cell type or group name")
 })
 
 test_that("subtypes need confidence scores in confList", {
     expect_error(plotWeightedSpatial(spe, tree2, conf, "img1", "G", "Typo"),
         "`targetSubtype = \"Typo\"` is not a subtype of 'G' in `confList`. Subtypes: A, B")
-    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A", "H", "Typo"),
+    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A",
+        "H", "Typo"),
         "`subtypeB = \"Typo\"` is not a subtype of 'H' in `confList`. Subtypes: C, D")
-    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "Typo", "H", "C"),
+    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "Typo",
+        "H", "C"),
         "`subtypeA = \"Typo\"` is not a subtype of 'G'")
     expect_error(plotWeightedSpatial(spe, tree2, conf["G"], "img1", "H", "C"),
         "`confList` has no confidence scores for the group 'H'")
@@ -373,17 +440,20 @@ test_that("plotNicheSpatial checks that the niche exists", {
 
 test_that("plotMetricBoxplot checks the pair, the results and the outcome", {
     skip_if_not_installed("ggiraph")
-    res = quiet(runColocalisationModels(d$spe, d$tree, d$conf, "outcome"))
+    skip_if_not_installed("gdtools")
+    res <- quiet(runColocalisationModels(d$spe, d$tree, d$conf, "outcome"))
     expect_error(plotMetricBoxplot(res, d$spe, "A", "Zzz", "outcome"),
         "The pair 'A' -> 'Zzz' is not in the results$")
     expect_error(plotMetricBoxplot(res, d$spe, "Zzz", "B", "outcome"),
         "The pair 'Zzz' -> 'B' is not in the results")
     # relative co-localisation only has pairs whose `to` has a parent
-    expect_error(plotMetricBoxplot(res, d$spe, "A", "G", "outcome", metric = "kontextual"),
+    expect_error(plotMetricBoxplot(res, d$spe, "A", "G", "outcome",
+        metric = "kontextual"),
         "The pair 'A' -> 'G' is not in the results for metric = \"kontextual\". Relative co-localisation only has pairs whose `toType` has a parent other than itself")
     expect_error(plotMetricBoxplot(list(), d$spe, "A", "B", "outcome"),
         "`results` must be the output of runColocalisationModels\\(\\)")
-    expect_error(plotMetricBoxplot(res$modelWeighted, d$spe, "A", "B", "outcome"),
+    expect_error(plotMetricBoxplot(res$modelWeighted, d$spe, "A", "B",
+        "outcome"),
         "`results` must be the output of runColocalisationModels\\(\\)")
     expect_error(plotMetricBoxplot(res, d$spe, c("A", "B"), "B", "outcome"),
         "`fromType` must be a single cell type or group name")
@@ -392,6 +462,30 @@ test_that("plotMetricBoxplot checks the pair, the results and the outcome", {
 
     # outcomeCol has no default any more
     expect_true("outcomeCol" %in% names(formals(plotMetricBoxplot)))
-    expect_true(identical(formals(plotMetricBoxplot)$outcomeCol, quote(expr = )))
+    expect_true(identical(formals(plotMetricBoxplot)$outcomeCol,
+        quote(expr = )))
     expect_error(plotMetricBoxplot(res, d$spe, "A", "B"), "outcomeCol")
+})
+
+test_that("plotWeightedSpatialPair needs two different groups", {
+    expect_error(plotWeightedSpatialPair(spe, tree2, conf, "img1", "G", "A",
+        "G", "B"), "use plotWeightedSpatial\\(\\)")
+})
+
+test_that("plotWeightedSpatial calls the scores confidences", {
+    p <- plotWeightedSpatial(spe, tree2, conf, "img1", "G", "A")
+    expect_match(p$labels$title, "A confidence")
+    expect_equal(p$labels$alpha, "Confidence")
+})
+
+test_that("the boxplots check for an imageID column", {
+    cells <- data.frame(outcome = "a")
+    res <- list(unweighted = data.frame(imageID = "i", from = "A", to = "B",
+        colocalisation = 1))
+    res$weighted <- res$unweighted
+    expect_error(fuzzyCell:::metricBoxplotGG(res, cells, "A", "B", "outcome",
+        "lfunction"), "`imageID = \"imageID\"` is not a column")
+    props <- data.frame(imageID = "i", niche = "niche1", proportion = 0.5)
+    expect_error(fuzzyCell:::nicheProportionBoxplotGG(props, "niche1", cells,
+        "outcome"), "`imageID = \"imageID\"` is not a column")
 })

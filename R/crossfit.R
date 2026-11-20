@@ -1,10 +1,12 @@
-# Class probabilities from a trained classifier, one column per class.
-predictClassifierProb = function(fit, newx, classifier = c("pcaLogistic", "logistic", "rf", "lda")) {
-    classifier = match.arg(classifier)
+# Class probabilities from a trained classifier, one row per cell and one
+# column per class.
+predictClassifierProb <- function(fit, newx, classifier) {
     if (classifier %in% c("logistic", "pcaLogistic")) {
-        eta = logisticEta(fit, newx)
-        eta = eta - eta[cbind(seq_len(nrow(eta)), max.col(eta, ties.method = "first"))]
-        p = exp(eta)
+        eta <- logisticEta(fit, newx)
+        # subtract each row's largest value before exp() so it cannot overflow
+        eta <- eta - eta[cbind(seq_len(nrow(eta)),
+            max.col(eta, ties.method = "first"))]
+        p <- exp(eta)
         return(p / rowSums(p))
     }
     switch(classifier,
@@ -17,123 +19,122 @@ predictClassifierProb = function(fit, newx, classifier = c("pcaLogistic", "logis
 # split into folds, and each fold is predicted by a classifier trained on the
 # other folds with balanced classes (as in bootstrapClassify()), so no cell is
 # scored by a classifier that saw it.
-crossfitClassify = function(countMat, labels, nFolds = 5, nPerClass = 50, seed = NULL,
-                            classifier = c("pcaLogistic", "logistic", "rf", "lda"), ntree = 500,
-                            priors = c("balanced", "observed"), BPPARAM = BiocParallel::SerialParam()) {
-    classifier = match.arg(classifier)
-    priors = match.arg(priors)
-    labels = as.character(labels)
-    if (!is.numeric(nFolds) || length(nFolds) != 1 || is.na(nFolds) || nFolds != round(nFolds) ||
-        nFolds < 2 || nFolds > length(labels)) {
-        stop("`nFolds` must be a whole number between 2 and the number of cells (", length(labels), ")",
-            call. = FALSE)
+crossfitClassify <- function(countMat, labels, nFolds = 5, nPerClass = 50,
+        classifier = c("pcaLogistic", "logistic", "rf", "lda"), ntree = 500,
+        priors = c("balanced", "observed"), cores = 1) {
+    classifier <- match.arg(classifier)
+    priors <- match.arg(priors)
+    labels <- as.character(labels)
+    if (!is.numeric(nFolds) || length(nFolds) != 1 || is.na(nFolds) ||
+        nFolds != round(nFolds) || nFolds < 2 || nFolds > length(labels)) {
+        stop("`nFolds` must be a whole number between 2 and the number of ",
+            "cells (", length(labels), ")", call. = FALSE)
     }
-    # every training split needs every class, so a class needs cells in at least 2 folds
-    classSizes = table(labels)
-    tooSmall = names(classSizes)[classSizes < 2]
-    if (length(tooSmall) > 0) {
-        stop("Each class needs at least 2 cells, so that every fold's training cells include it, but ",
-            paste0("'", tooSmall, "' has ", classSizes[tooSmall], collapse = ", "),
-            ". Drop or merge these cell types.", call. = FALSE)
-    }
-    if (is.null(colnames(countMat))) colnames(countMat) = paste0("gene", seq_len(ncol(countMat)))
-    blasThreads = setBlasThreads(1L)
+
+    checkClassSizes(labels, ", so that every fold's training cells include it")
+    countMat <- withGeneNames(countMat)
+    checkCountMatrix(countMat, labels, correctedCounts = TRUE)
+    blasThreads <- setBlasThreads(1L)
     on.exit(setBlasThreads(blasThreads), add = TRUE)
-    localSeed(seed)
-    scaledMat = scaleCountMat(countMat)
-    keep = varyingColumns(scaledMat)
-    scaledMat = scaledMat[, keep, drop = FALSE]
-    classes = sort(unique(labels))
-    # stratified folds: the cells of each class, shuffled, are dealt round the folds in turn, so a class of
-    # at least 2 cells has cells in at least 2 folds and the fold sizes differ by at most 1
-    dealt = unlist(lapply(classes, function(lab) {
-        idx = which(labels == lab)
-        idx[sample.int(length(idx))]
+    features <- classifierFeatures(countMat)
+    scaledMat <- features$scaled[, features$keep, drop = FALSE]
+    classes <- sort(unique(labels))
+    fold <- stratifiedFolds(labels, classes, nFolds)
+    # one fold per task; each draws its balanced training set from its own
+    # random stream
+    fits <- parLapply(seq_len(nFolds), function(k) {
+        train <- balancedSample(which(fold != k), labels, nPerClass)
+        fit <- trainClassifier(scaledMat[train, , drop = FALSE], labels[train],
+            classifier, ntree = ntree)
+        test <- which(fold == k)
+        list(test = test, p = predictClassifierProb(fit,
+            scaledMat[test, , drop = FALSE], classifier))
+    }, parallelParam(cores))
+
+    probs <- do.call(rbind, lapply(fits, function(f) {
+        p <- matrix(0, nrow(f$p), length(classes),
+            dimnames = list(NULL, classes))
+        p[, colnames(f$p)] <- f$p
+        p
     }))
-    fold = integer(length(labels))
-    fold[dealt] = rep(seq_len(nFolds), length.out = length(labels))
-    out = matrix(NA_real_, length(labels), length(classes), dimnames = list(NULL, classes))
-    # one fold per task; each draws its balanced training set from its own random stream
-    seeds = sample.int(.Machine$integer.max, nFolds)
-    fits = parLapply(seq_len(nFolds), function(k) {
-        localSeed(seeds[k])
-        train = which(fold != k)
-        sizes = table(labels[train])
-        targetSize = max(min(sizes), nPerClass)
-        balancedIdx = unlist(lapply(names(sizes), function(lab) {
-            idx = train[labels[train] == lab]
-            idx[sample.int(length(idx), size = targetSize, replace = length(idx) < targetSize)]
-        }))
-        fit = trainClassifier(scaledMat[balancedIdx, , drop = FALSE], labels[balancedIdx], classifier, ntree = ntree)
-        test = which(fold == k)
-        list(test = test, p = predictClassifierProb(fit, scaledMat[test, , drop = FALSE], classifier))
-    }, BPPARAM)
-    for (f in fits) out[f$test, colnames(f$p)] = f$p
-    out[is.na(out)] = 0
+    out <- matrix(0, length(labels), length(classes),
+        dimnames = list(NULL, classes))
+    out[unlist(lapply(fits, `[[`, "test")), ] <- probs
     if (priors == "observed") {
-        out = sweep(out, 2, c(table(factor(labels, levels = classes))) / length(labels), "*")
-        out = out / rowSums(out)
+        shares <- c(table(factor(labels, levels = classes))) / length(labels)
+        out <- sweep(out, 2, shares, "*")
+        out <- out / rowSums(out)
     }
     out
 }
 
+# Each cell's fold: the cells of each class, shuffled, are dealt round the
+# folds in turn, so every class with at least 2 cells is in at least 2 folds and
+# the fold sizes differ by at most 1.
+stratifiedFolds <- function(labels, classes, nFolds) {
+    dealt <- unlist(lapply(classes, function(lab) {
+        idx <- which(labels == lab)
+        idx[sample.int(length(idx))]
+    }))
+    fold <- integer(length(labels))
+    fold[dealt] <- rep(seq_len(nFolds), length.out = length(labels))
+    fold
+}
+
 #' Cross-fitted classification probabilities for every group of a tree
 #'
-#' An alternative to [bootstrapLineageConfidence()]: for each group with
-#' children, a classifier is trained on the group's cells with balanced classes
-#' and gives each cell the probability of each child cell type. The cells are
-#' split into `nFolds` folds and each fold is scored by a classifier trained on
-#' the other folds, so no cell is scored by a classifier that saw it. Because
-#' the classes are balanced in training, the probabilities give every child cell
-#' type the same prior weight.
+#' An alternative to
+#' [bootstrapLineageConfidence()]: for
+#' each group, a classifier is trained on the group's cells with balanced
+#' classes and gives each cell the probability of each child cell type. The
+#' cells are split into `nFolds` folds and each fold is scored by a classifier
+#' trained on the other folds, so no cell is scored by a classifier that saw it.
+#' Because the classes are balanced in training, the probabilities give every
+#' child cell type the same prior weight.
 #'
 #' @inheritParams bootstrapLineageConfidence
-#' @param nFolds Number of folds. The folds are stratified by cell type, so
-#'   every fold's classifier is trained on every child cell type; each child cell
-#'   type therefore needs at least 2 cells.
-#' @param classifier `"pcaLogistic"` (the default), `"logistic"`, `"rf"` or `"lda"`, as in
+#' @param nFolds Number of folds. They are stratified by cell type, so each
+#'   child cell type needs at least 2 cells.
+#' @param classifier `"pcaLogistic"` (the default), `"logistic"`,
+#'   `"rf"` or `"lda"`, as in
 #'   [bootstrapClassify()].
 #' @param priors `"balanced"` (equal priors, as the classifier is trained) or
 #'   `"observed"` (each class weighted by its share of the group's cells).
 #' @param cores Number of cores to fit the folds on in parallel, as in
 #'   [bootstrapClassify()].
 #'
-#' @return A confidence list in the format of [bootstrapLineageConfidence()],
-#'   with probabilities in place of bootstrap confidences.
+#' @return A list with one data frame per group, named by group, in the format
+#'   of [bootstrapLineageConfidence()]: a
+#'   `cellID` column, and one column per child cell type with the cell's
+#'   probability of it (each row sums to 1). Groups with no cells, or with only
+#'   one cell type present, are skipped with a message.
+#'
+#' @seealso [bootstrapLineageConfidence()], the
+#'   bootstrap confidences, which measure how stable each cell's label is when
+#'   its counts are resampled. Either result can be passed as `confList` to the
+#'   downstream analyses.
 #'
 #' @examples
 #' data(lungSubset)
 #' data(lungCellTypeTree)
-#' probList = crossfitLineageProbabilities(lungSubset, lungCellTypeTree,
-#'     nFolds = 3, seed = 1)
+#' set.seed(1)
+#' probList <- crossfitLineageProbabilities(lungSubset, lungCellTypeTree,
+#'     nFolds = 3)
 #' head(probList[["Endothelial lineage"]])
 #' @export
-crossfitLineageProbabilities = function(spe, cellTypeTree, nFolds = 5, nPerClass = 50, seed = 51773,
-                                        classifier = c("pcaLogistic", "logistic", "rf", "lda"), ntree = 500,
-                                        priors = c("balanced", "observed"), cores = 1,
-                                        skipGroups = character(0), cellType = "cellType",
-                                        cellID = "cellID", assayName = "counts") {
-    classifier = match.arg(classifier)
-    priors = match.arg(priors)
+crossfitLineageProbabilities <- function(spe, cellTypeTree, nFolds = 5,
+        nPerClass = 50, classifier = c("pcaLogistic", "logistic", "rf", "lda"),
+        ntree = 500, priors = c("balanced", "observed"), cores = 1,
+        skipGroups = character(0), cellType = "cellType", cellID = "cellID",
+        assayName = "counts") {
+    classifier <- match.arg(classifier)
+    priors <- match.arg(priors)
     checkCores(cores)
-    BPPARAM = parallelParam(cores)
-    checkSpe(spe)
-    checkColumn(spe, cellType, "cellType")
-    checkColumn(spe, cellID, "cellID")
-    checkAssay(spe, assayName)
-    spe = annotateCellTypeTree(spe, cellTypeTree, cellType = cellType)
-    groups = setdiff(buildCellTypeMap(cellTypeTree)$groupsWithChildren, skipGroups)
-    probList = lapply(seq_along(groups), function(gi) {
-        idx = which(spe$group == groups[gi])
-        labels = spe[[cellType]][idx]
-        if (length(idx) == 0 || length(unique(labels)) < 2) return(NULL)
-        countMat = denseCounts(assay(spe[, idx], assayName))
-        p = crossfitClassify(countMat, labels, nFolds = nFolds, nPerClass = nPerClass,
-            seed = if (is.null(seed)) NULL else seed + gi, classifier = classifier, ntree = ntree,
-            priors = priors, BPPARAM = BPPARAM)
-        message(sprintf("[%d/%d] Lineage: %s done", gi, length(groups), groups[gi]))
-        data.frame(cellID = spe[[cellID]][idx], p, check.names = FALSE)
-    })
-    names(probList) = groups
-    probList[!vapply(probList, is.null, logical(1))]
+    classify <- function(countMat, labels) {
+        crossfitClassify(countMat, labels, nFolds = nFolds,
+            nPerClass = nPerClass, classifier = classifier, ntree = ntree,
+            priors = priors, cores = cores)
+    }
+    confidencePerGroup(spe, cellTypeTree, classify, skipGroups, cellType,
+        cellID, assayName, method = "cross-fitted")
 }

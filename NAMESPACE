@@ -8,7 +8,6 @@ export(buildCellTypeMap)
 export(confidenceWeights)
 export(crossfitLineageProbabilities)
 export(getCellData)
-export(loadAmancherla)
 export(nicheBarplot)
 export(nicheCompositionMap)
 export(nicheProportionBoxplot)
@@ -32,19 +31,12 @@ importFrom(SummarizedExperiment,
   assay,
   colData
 )
-importFrom(methods,is)
-importFrom(rlang,
-  ":=",
-  .data
-)
+importFrom(rlang,.data)
 importFrom(stats,
   as.formula,
   kmeans,
   lm,
   p.adjust,
   predict,
-  reorder,
-  setNames,
-  var
+  setNames
 )
-importFrom(utils,head)

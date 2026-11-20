@@ -10,6 +10,7 @@ runColocalisationModels(
   confList,
   outcomeCol,
   r = 50,
+  window = c("convex", "square"),
   subject = NULL,
   cores = 1,
   parentOverrides = character(0),
@@ -28,7 +29,8 @@ cell ID, cell type, image and coordinates for every cell (see
 
 \item{cellTypeTree}{A cell type tree, see \link{cellTypeTree}.}
 
-\item{confList}{Confidence list from \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
+\item{confList}{Confidence list from
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
 
 \item{outcomeCol}{Name of the \code{colData(spe)} column with the per-image
 outcome. It must have exactly two levels and a single value per image.}
@@ -36,41 +38,53 @@ outcome. It must have exactly two levels and a single value per image.}
 \item{r}{Radius within which cells count as neighbours, in the units of the
 coordinates; a single positive number.}
 
-\item{subject}{Name of the \code{colData(spe)} column identifying the subject (for
-example the patient) each image comes from. With \code{NULL} every image is its
-own subject.}
+\item{window}{The area of each image that densities are computed over:
+\code{"convex"} (the default), the convex hull of the image's cells, or
+\code{"square"}, the rectangle around them. The same window is used for
+co-localisation and relative co-localisation, and
+\code{\link[=runNicheIdentification]{runNicheIdentification()}} has the same
+default.}
 
-\item{cores}{Number of threads.}
+\item{subject}{Name of the \code{colData(spe)} column identifying the subject
+(for example the patient) each image comes from. With \code{NULL} every image
+is its own subject.}
+
+\item{cores}{Number of cores spicyR runs on.}
 
 \item{parentOverrides}{Named character vector mapping a \code{to} label to the
 ancestor node (a group, wrapper or lineage in \code{cellTypeTree}) that
-relative co-localisation should compare against instead of the label's
-own group, for example \code{c("Fibroblast lineage" = "Mesenchymal")}.}
+relative co-localisation should compare against instead of the label's own
+group, for example \code{c("Fibroblast lineage" = "Mesenchymal")}.}
 
 \item{autoOverrideParents}{Whether to add overrides found by
-\code{\link[=autoParentOverrides]{autoParentOverrides()}}. Use \code{FALSE} to condition only on the parents you
-list in \code{parentOverrides}.}
+\code{\link[=autoParentOverrides]{autoParentOverrides()}}. Use \code{FALSE} to
+condition only on the parents you list in \code{parentOverrides}.}
 
-\item{cellType, cellID, imageID}{Names of the \code{colData(spe)} columns holding
-each cell's cell type label, a unique cell ID (matching the \code{cellID}
-column of \code{confList}), and the image it is in.}
+\item{cellType, cellID, imageID}{Names of the \code{colData(spe)} columns
+holding each cell's cell type label, a unique cell ID (matching the
+\code{cellID} column of \code{confList}), and the image it is in.}
 
 \item{x, y}{Names of the columns holding the cell coordinates. For a
 \code{SpatialExperiment} whose coordinates are in \code{spatialCoords()}, the
 defaults \code{"x"} and \code{"y"} refer to its first two coordinates.}
 }
 \value{
-A list with the tests \code{modelWeighted}, \code{modelUnweighted},
-\code{modelRelativeWeighted} and \code{modelRelativeUnweighted} (one row per pair:
-\code{estimate}, the difference for the second level of the outcome compared with
-the first, its \code{se}, \code{statistic}, \code{p.value} and BH-adjusted \code{p.adj}, and for
-relative co-localisation the \code{parent} and \code{side}, \code{"attract"} or \code{"avoid"}),
-the per-image values
-\code{weighted}, \code{unweighted}, \code{relativeWeighted} and \code{relativeUnweighted}
-(columns \code{imageID}, \code{from}, \code{to}, \code{colocalisation}, and \code{parent} for the
-relative version), and the spicyR results themselves (\code{spicy}, a list of
-\code{weighted}, \code{unweighted}, \code{relativeWeighted} and \code{relativeUnweighted}), for
+A list with:
+\itemize{
+\item the tests, one row per pair: \code{modelWeighted}, \code{modelUnweighted},
+\code{modelRelativeWeighted} and \code{modelRelativeUnweighted}. Columns:
+\code{from}, \code{to}, \code{estimate} (the second level of the outcome minus
+the first), \code{se}, \code{statistic}, \code{p.value} and the BH-adjusted
+\code{p.adj}; the relative tables also have the \code{parent} and \code{side}
+(\code{"attract"} or \code{"avoid"}).
+\item the per-image values: \code{weighted}, \code{unweighted},
+\code{relativeWeighted} and \code{relativeUnweighted}. Columns: \code{imageID},
+\code{from}, \code{to}, \code{colocalisation}, and \code{parent} for the
+relative versions.
+\item \code{spicy}: the spicyR results themselves (\code{weighted},
+\code{unweighted}, \code{relativeWeighted} and \code{relativeUnweighted}), for
 spicyR's plotting functions.
+}
 }
 \description{
 Tests, for every pair of leaf cell types and groups, whether the
@@ -82,37 +96,34 @@ relative co-localisation is Statial's Kontextual test
 (\code{spicyR::kontextualEngine()}).
 }
 \details{
-Co-localisation of a pair \code{from} -> \code{to} in an image is the cross-type
-L-function: how strongly the \code{from} cells are attracted to (positive values)
-or avoid (negative values) the \code{to} cells within radius \code{r}, with 0 meaning no
-attraction or repulsion. The area of an image is that of the square around its
-cells, and cells near the border are edge corrected. Each pair is then tested
-by a linear model of its per-image values on the outcome (the images are the
-units); if some subjects have several images, spicyR fits a mixed model with
-the subject as a random effect instead.
+Co-localisation is the cross-type L-function in each image: positive values
+mean the \code{from} cells cluster around the \code{to} cells within radius
+\code{r}, negative values that they avoid them. Each pair is tested with a
+linear model of the per-image values on the outcome (a mixed model if some
+subjects have several images).
 
-With weights (see \code{\link[=confidenceWeights]{confidenceWeights()}}), a cell of a bootstrapped group
-belongs to each subtype of the group with its bootstrap confidence: each cell
-contributes to a label in proportion to its weight, and the density of a label
-is its summed weight per unit area. With the original labels (weights of 0
-and 1) this is the unweighted L-function.
+With weights, each cell counts towards each subtype of its group in
+proportion to its bootstrap confidence (see
+\code{\link[=confidenceWeights]{confidenceWeights()}}).
 
-Relative co-localisation compares the co-localisation of \code{from} with \code{to} to
-that of \code{from} with a parent population of \code{to}, so that attraction that only
-arises because both cell types prefer the same region is not counted. By
-default the parent of a \code{to} cell type is its own group; \code{parentOverrides} and
-\code{autoOverrideParents} give broader parents. Pairs whose \code{to} has no parent
-other than itself are not tested.
-
-A label is not paired with itself, nor with a group that contains it.
+Relative co-localisation compares the co-localisation of \code{from} with
+\code{to} to that with a parent population of \code{to}: by default \code{to}'s
+own group (see \code{parentOverrides}). Attraction that comes only from both
+cell types preferring the same region is then not counted. Pairs whose \code{to}
+has no parent are not tested, and no label is paired with itself or with a
+group that contains it.
 }
 \examples{
-\donttest{
 data(lungSubset)
 data(lungCellTypeTree)
 data(lungConfList)
-res = runColocalisationModels(lungSubset, lungCellTypeTree, lungConfList,
-    outcomeCol = "disease_status", subject = "subject")
+# a small example: the endothelial cells and granulocytes only
+groups <- c("Endothelial lineage", "Granulocytes")
+tree <- lungCellTypeTree[["Immune"]][["Myeloid"]]["Granulocytes"]
+tree <- c(lungCellTypeTree["Endothelial lineage"], tree)
+cellTypes <- unlist(lapply(groups, function(g) resolveTreeLeaves(tree, g)))
+spe <- lungSubset[, lungSubset$cellType \%in\% cellTypes]
+res <- runColocalisationModels(spe, tree, lungConfList[groups],
+    outcomeCol = "disease_status")
 head(res$modelWeighted)
-}
 }

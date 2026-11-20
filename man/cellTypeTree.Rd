@@ -18,44 +18,42 @@ autoParentOverrides(cellTypeTree)
 }
 \arguments{
 \item{cellTypeTree}{A nested list describing the cell type hierarchy (see
-Details and \link{heartCellTypeTree}).}
+Details and \link{lungCellTypeTree}).}
 
-\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}), or a
-\code{data.frame}/\code{DataFrame} of per-cell data.}
+\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}), or
+a \code{data.frame}/\code{DataFrame} of per-cell data.}
 
-\item{cellType}{Name of the column of \code{colData(spe)} (or of the data frame)
-holding each cell's cell type label. An error is raised if it is not a
-column.}
+\item{cellType}{Name of the column of \code{colData(spe)} (or of the data
+frame) holding each cell's cell type label.}
 
 \item{nodeName}{A single string: the name of any node in \code{cellTypeTree}, a
 lineage, an organisational wrapper, a group or a cell type.}
 }
 \value{
 \itemize{
-\item \code{buildCellTypeMap()}: a list with \code{cellMap} (a \code{data.frame} with columns
-\code{cellType}, \code{group} and \code{broad}, one row per cell type) and
-\code{groupsWithChildren} (names of the groups to be bootstrap-refined). An
-error is raised if the tree is not a valid tree as described in Details:
-it must be a non-empty named list, every top-level entry must be named,
-groups may only contain \code{children}, cell type names must be non-empty
-strings, and names must not be repeated or shared between cell types and
-lineages, wrappers or groups.
-\item \code{annotateCellTypeTree()}: \code{spe} with \code{group} and \code{lineage} columns added
-(a message reports any existing \code{group} or \code{lineage} column whose values
-are replaced). An error is raised if any cell's cell type is not in the
-tree (including \code{NA}).
+\item \code{buildCellTypeMap()}: a list with \code{cellMap} (a \code{data.frame}
+with columns \code{cellType}, \code{group} and \code{lineage}, one row per cell
+type) and \code{groupsWithChildren} (names of the groups to be
+bootstrap-refined). An error is raised if the tree does not follow the
+rules in Details.
+\item \code{annotateCellTypeTree()}: \code{spe} with \code{group} and
+\code{lineage} columns added (a message reports any existing \code{group} or
+\code{lineage} column whose values are replaced). An error is raised if any
+cell's cell type is not in the tree (including \code{NA}).
 \item \code{resolveTreeLeaves()}: character vector of every cell type beneath
 \code{nodeName}.
-\item \code{autoParentOverrides()}: named character vector mapping each group that
-has a named ancestor to that ancestor, for use as \code{parentOverrides} in
+\item \code{autoParentOverrides()}: named character vector mapping each group
+that has a named ancestor to that ancestor, for use as \code{parentOverrides} in
 \code{\link[=runColocalisationModels]{runColocalisationModels()}}.
 }
 }
 \description{
 Helpers for the cell type tree: a nested list describing how cell types are
 organised into broad lineages and (optionally) groups of closely related
-subtypes. \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}} refines the cells within each group,
-and the analysis functions compare cell types, groups and lineages.
+subtypes.
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}} refines
+the cells within each group, and the analysis functions compare cell types,
+groups and lineages.
 }
 \details{
 A tree is a named list with one entry per broad lineage (these become the
@@ -63,9 +61,9 @@ A tree is a named list with one entry per broad lineage (these become the
 or a list whose entries are:
 \itemize{
 \item a bare string: a cell type that is not in any group;
-\item a named \code{list(children = c(...))}: a \strong{group} of closely related cell
-types, the unit that is bootstrap-refined. A group may contain only
-\code{children};
+\item a named \code{list(children = c(...))}: a \strong{group} of closely
+related cell types, the unit that is bootstrap-refined. A group may contain
+only \code{children};
 \item a named list of further entries: purely organisational nesting (a
 "wrapper") that is not a group itself, to any depth.
 }
@@ -73,7 +71,8 @@ types, the unit that is bootstrap-refined. A group may contain only
 A lineage can also itself be \code{list(children = c(...))}, in which case the
 lineage name doubles as the group name. A cell type's group is its nearest
 \code{list(children = ...)} ancestor, however many wrappers sit above it. In the
-example below \code{CD8_Resting} is in the group \verb{CD8+ T cells}, not \verb{T cells}.
+example below \code{CD8_Resting} is in the group \verb{CD8+ T cells}, not
+\verb{T cells}.
 
 Every cell type must appear exactly once, and lineage, wrapper and group
 names must be unique and different from every cell type name.
@@ -88,11 +87,11 @@ names must be unique and different from every cell type name.
     "Endothelial lineage" = c("Endothelial", "Activated endothelial"))
 }\if{html}{\out{</div>}}
 
-\code{resolveTreeLeaves()} expands any node, however far up the tree, to the cell
-types beneath it. It is used by relative co-localisation when it conditions
-on a parent that is broader than a cell type's own group (see
-\code{parentOverrides} in \code{\link[=runColocalisationModels]{runColocalisationModels()}}), and \code{autoParentOverrides()} finds
-those parents automatically.
+\code{resolveTreeLeaves()} returns every cell type below a node of the tree,
+however deep. \code{autoParentOverrides()} returns the node directly above each
+group. Both help choose the parent for relative co-localisation (see
+\code{parentOverrides} in
+\code{\link[=runColocalisationModels]{runColocalisationModels()}}).
 }
 \examples{
 data(lungCellTypeTree)
@@ -101,6 +100,6 @@ resolveTreeLeaves(lungCellTypeTree, "Immune")
 autoParentOverrides(lungCellTypeTree)
 
 data(lungSubset)
-cells = annotateCellTypeTree(getCellData(lungSubset), lungCellTypeTree)
+cells <- annotateCellTypeTree(getCellData(lungSubset), lungCellTypeTree)
 table(cells$group, useNA = "ifany")
 }

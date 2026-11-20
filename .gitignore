@@ -8,3 +8,8 @@ TEST.html
 TEST_files/
 TEST.knit.md
 docs/
+*.Rproj
+vignettes/.quarto/
+Rplots.pdf
+tests/testthat/_problems/
+tests/testthat/testthat-problems.rds

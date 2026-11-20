@@ -7,12 +7,14 @@
 plotProportionBoxplot(results, cellType, spe, outcomeCol)
 }
 \arguments{
-\item{results}{Output of \code{\link[=runProportionsPipeline]{runProportionsPipeline()}} or
+\item{results}{Output of
+\code{\link[=runProportionsPipeline]{runProportionsPipeline()}} or
 \code{\link[=runProportionsRelativeToParentPipeline]{runProportionsRelativeToParentPipeline()}}.}
 
 \item{cellType}{The cell type to show: one of the \code{cellType} values in
-\code{results$proportions}. For \code{\link[=runProportionsPipeline]{runProportionsPipeline()}} results this can also
-be one of the bootstrapped groups.}
+\code{results$proportions}. For
+\code{\link[=runProportionsPipeline]{runProportionsPipeline()}} results this
+can also be one of the bootstrapped groups.}
 
 \item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with
 \code{imageID} and the outcome in \code{colData}.}
@@ -27,19 +29,21 @@ package.
 Shows, for one cell type (or group), each image's proportion measured with
 the original labels (unweighted) and with the bootstrap confidence weights
 (weighted), for each level of the outcome. For the results of
-\code{\link[=runProportionsPipeline]{runProportionsPipeline()}} the proportion is of all cells in the image; for
-the results of \code{\link[=runProportionsRelativeToParentPipeline]{runProportionsRelativeToParentPipeline()}} it is of the cells
-of the parent group. Each point is one image.
+\code{\link[=runProportionsPipeline]{runProportionsPipeline()}} the proportion
+is of all cells in the image; for the results of
+\code{\link[=runProportionsRelativeToParentPipeline]{runProportionsRelativeToParentPipeline()}}
+it is of the cells of the parent group. Each point is one image.
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
 data(lungConfList)
-res = runProportionsPipeline(lungSubset, lungCellTypeTree, lungConfList,
+res <- runProportionsPipeline(lungSubset, lungCellTypeTree, lungConfList,
     outcomeCol = "disease_status", subject = "subject")
-rel = runProportionsRelativeToParentPipeline(lungSubset, lungCellTypeTree,
+rel <- runProportionsRelativeToParentPipeline(lungSubset, lungCellTypeTree,
     lungConfList, outcomeCol = "disease_status", subject = "subject")
-if (requireNamespace("ggiraph", quietly = TRUE)) {
+if (requireNamespace("ggiraph", quietly = TRUE) &&
+    requireNamespace("gdtools", quietly = TRUE)) {
     plotProportionBoxplot(res, "Arteriole", lungSubset, "disease_status")
     plotProportionBoxplot(rel, "Arteriole", lungSubset, "disease_status")
 }

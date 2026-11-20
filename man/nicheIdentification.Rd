@@ -12,10 +12,9 @@ runNicheIdentification(
   toLabels = NULL,
   r = c(20, 50, 100),
   k,
-  window = "convex",
+  window = c("convex", "square"),
   lisaFunc = "K",
   cores = 1,
-  seed = 51773,
   cellType = "cellType",
   cellID = "cellID",
   imageID = "imageID",
@@ -30,7 +29,8 @@ cell ID, cell type, image and coordinates for every cell (see
 
 \item{cellTypeTree}{A cell type tree, see \link{cellTypeTree}.}
 
-\item{confList}{Confidence list from \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
+\item{confList}{Confidence list from
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
 
 \item{toLabels}{Labels (leaves and/or groups) to build features from;
 defaults to every leaf and group in the tree. An error is raised for a
@@ -41,27 +41,33 @@ label that is not in the tree.}
 \item{k}{Number of niches, a whole number of at least 2 and below the number
 of cells.}
 
-\item{window, lisaFunc}{The image window and the local function (\code{"K"} or
-\code{"L"}), as in \code{lisaClust::lisa()}.}
+\item{window}{The area of each image that densities are computed over:
+\code{"convex"} (the default), the convex hull of the image's cells, or
+\code{"square"}, the rectangle around them, as in
+\code{\link[=runColocalisationModels]{runColocalisationModels()}}.}
 
-\item{cores}{Number of threads.}
+\item{lisaFunc}{The local function, \code{"K"} or \code{"L"}, as in
+\code{lisaClust::lisa()}.}
 
-\item{seed}{Random seed for the k-means clustering, as in
-\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}, or \code{NULL} for no fixed seed. The same seed
-is used for the unweighted and weighted clusterings.}
+\item{cores}{Number of cores spicyR runs on.}
 
-\item{cellType, cellID, imageID}{Names of the \code{colData(spe)} columns holding
-each cell's cell type label, a unique cell ID (matching the \code{cellID}
-column of \code{confList}), and the image it is in.}
+\item{cellType, cellID, imageID}{Names of the \code{colData(spe)} columns
+holding each cell's cell type label, a unique cell ID (matching the
+\code{cellID} column of \code{confList}), and the image it is in.}
 
 \item{x, y}{Names of the columns holding the cell coordinates. For a
 \code{SpatialExperiment} whose coordinates are in \code{spatialCoords()}, the
 defaults \code{"x"} and \code{"y"} refer to its first two coordinates.}
 }
 \value{
-A list with the feature matrices (\code{lisaMatUnweighted},
-\code{lisaMatWeighted}) and named cell-to-niche vectors \code{nicheUnweighted} and
-\code{nicheWeighted}.
+A list with:
+\itemize{
+\item \code{lisaMatUnweighted}, \code{lisaMatWeighted}: the features, matrices
+with one row per cell (named by cell ID) and one column per label in
+\code{toLabels} and radius in \code{r};
+\item \code{nicheUnweighted}, \code{nicheWeighted}: each cell's niche
+(\code{"niche1"}, \code{"niche2"}, ...), as character vectors named by cell ID.
+}
 }
 \description{
 Defines niches by k-means clustering of per-cell feature vectors, once with
@@ -74,20 +80,23 @@ For every cell, every label in \code{toLabels} and every radius in \code{r}, the
 feature is the local co-localisation of the cell's neighbours with that label
 (lisaClust's local K or L function, centred so that 0 means no attraction or
 repulsion). The weighted features count each neighbour with its bootstrap
-confidence of having the label, instead of 0 or 1 (see \code{\link[=confidenceWeights]{confidenceWeights()}}),
-and a label's density is its summed weight per unit area.
+confidence of having the label, instead of 0 or 1 (see
+\code{\link[=confidenceWeights]{confidenceWeights()}}), and a label's density is
+its summed weight per unit area.
 
-Niche names (\code{niche1}, \code{niche2}, ...) are arbitrary. K-means starts from
-random cluster centres, so the niches depend on the random seed. The
-unweighted and weighted clusterings are both started from the same \code{seed},
-so that if the weights made no difference the two sets of niches would be
+Niche names (\code{niche1}, \code{niche2}, ...) are arbitrary. K-means starts
+from random cluster centres, so the niches depend on the random seed; call
+\code{\link[=set.seed]{set.seed()}} first for reproducible niches. The
+unweighted and weighted clusterings both start from the same random state, so
+that if the weights made no difference the two sets of niches would be
 identical.
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
 data(lungConfList)
-niches = runNicheIdentification(lungSubset, lungCellTypeTree, lungConfList,
+set.seed(1)
+niches <- runNicheIdentification(lungSubset, lungCellTypeTree, lungConfList,
     r = 50, k = 6)
 table(weighted = niches$nicheWeighted, unweighted = niches$nicheUnweighted)
 }

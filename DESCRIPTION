@@ -1,5 +1,6 @@
 Package: fuzzyCell
 Type: Package
+BiocType: Software
 Title: Bootstrap Classification Confidence for Spatial Cell-Type Analysis
 Version: 0.99.1
 Authors@R: c(
@@ -26,12 +27,9 @@ biocViews: Software, Spatial, SingleCell, Classification, Clustering,
     StatisticalMethod, Regression, SupportVectorMachine
 Depends: R (>= 4.6.0)
 Imports:
-    BiocGenerics,
     BiocParallel,
-    callr,
-    dplyr,
     e1071,
-    forcats,
+    ggnewscale,
     ggplot2,
     glmnet,
     irlba,
@@ -55,10 +53,9 @@ Suggests:
     gdtools,
     ggalluvial,
     ggiraph,
-    ggnewscale,
     knitr,
+    lmerTest,
     quarto,
-    S4Vectors,
     SpatialDatasets,
     testthat (>= 3.0.0)
 VignetteBuilder: quarto

@@ -1,7 +1,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.vscode$
-^data-raw$
 ^\.github$
 ^README\.md$
 ^\.lintr$
@@ -14,3 +13,5 @@
 ^_pkgdown\.yml$
 ^docs$
 ^pkgdown$
+^vignettes/\.quarto$
+^Rplots\.pdf$

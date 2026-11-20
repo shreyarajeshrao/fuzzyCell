@@ -10,9 +10,7 @@ bootstrapLineageConfidence(
   nBoot = 100,
   nPerClass = 50,
   cores = 1,
-  seed = 51773,
   skipGroups = character(0),
-  subprocess = FALSE,
   classifier = c("pcaLogistic", "logistic", "rf", "lda", "svm"),
   ntree = 500,
   priors = c("balanced", "observed"),
@@ -23,53 +21,47 @@ bootstrapLineageConfidence(
 )
 }
 \arguments{
-\item{spe}{A \code{SummarizedExperiment} (e.g. \code{SpatialExperiment}) with a counts
-assay and per-cell cell type labels and unique cell IDs in \code{colData}.}
+\item{spe}{A \code{SummarizedExperiment} (e.g. \code{SpatialExperiment}) with
+an assay of raw counts, and each cell's type label and unique ID in
+\code{colData}.}
 
 \item{cellTypeTree}{A cell type tree, see \link{cellTypeTree}.}
 
 \item{nBoot}{Number of bootstrap resamples.}
 
-\item{nPerClass}{Minimum number of training cells per class; classes
-smaller than this are up-sampled with replacement.}
+\item{nPerClass}{Minimum number of training cells per class; classes smaller
+than this are up-sampled with replacement.}
 
-\item{cores}{Number of cores to run the bootstrap resamples on (forked
-with BiocParallel); the default runs serially. On Windows, where forking is
-not available, it always runs serially. If \code{seed} is given, the results are
-identical whatever the number of cores.}
-
-\item{seed}{Random seed, or \code{NULL} for no fixed seed. Each group is
-bootstrapped with \code{seed} plus its position in the list of groups, so every
-group is reproducible independently of the others.}
+\item{cores}{Number of cores to run the bootstrap resamples on (forked with
+BiocParallel); the default runs serially. On Windows, where forking is not
+available, it always runs serially. After \code{\link[=set.seed]{set.seed()}},
+the results are identical whatever the number of cores.}
 
 \item{skipGroups}{Names of groups to leave out of the result.}
 
-\item{subprocess}{If \code{TRUE}, each group is bootstrapped in a fresh R session
-(via callr), which only holds that group's counts. With \code{cores} above 1,
-every worker starts as a copy of the session it is forked from, so this
-keeps the workers small on large data. It requires the same version of fuzzyCell to be installed.}
-
-\item{classifier}{One of \code{"pcaLogistic"} (ridge multinomial logistic
-regression, via glmnet, with the penalty chosen by cross-validation, on the
-first 50 principal components of the training cells, computed exactly
-for up to 5,000 genes and with irlba beyond; the
-default), \code{"logistic"} (the same on all genes), \code{"rf"} (random forest, via randomForest), \code{"lda"} (linear
-discriminant analysis, via MASS) or \code{"svm"} (support vector machine, via
-e1071).}
+\item{classifier}{One of: * \code{"pcaLogistic"} (the default): ridge
+multinomial logistic regression, via glmnet, with the penalty chosen by
+cross-validation, on the first 50 principal components of the training
+cells (computed exactly for up to 5,000 genes, and with irlba beyond); *
+\code{"logistic"}: the same on all genes; * \code{"rf"}: random forest, via
+randomForest; * \code{"lda"}: linear discriminant analysis, via MASS; *
+\code{"svm"}: support vector machine, via e1071.}
 
 \item{ntree}{Number of trees; only used when \code{classifier = "rf"}.}
 
 \item{priors}{The classifier is trained with balanced classes, which gives
 every class the same prior. \code{"balanced"} keeps those equal priors;
 \code{"observed"} weights each class by its share of the cells, so a resample
-is assigned to its most probable class given how common the classes are.}
+is assigned to its most probable class given how common the classes are.
+\code{"observed"} needs class probabilities, so it is not available for
+\code{classifier = "svm"}.}
 
 \item{correctedCounts}{\code{FALSE} (the default) requires whole-number counts.
 \code{TRUE} also accepts counts that are not whole numbers, such as counts
 corrected for ambient RNA, and resamples them as they are. They must still
 be on the scale of molecule counts: a cell's resample draws as many
-transcripts as its total (rounded), so normalised or log-transformed values
-would give the wrong amount of resampling noise.}
+transcripts as its total (rounded), so normalised or log-transformed
+values would give the wrong amount of resampling noise.}
 
 \item{cellType}{Name of the \code{colData(spe)} column holding each cell's cell
 type label.}
@@ -80,33 +72,41 @@ They are returned in the \code{cellID} column of each result.}
 \item{assayName}{Name of the assay with the raw counts.}
 }
 \value{
-A named list with one element per group (named by group). Groups
-with no cells, or with only one cell type present, cannot be bootstrapped:
-they are skipped with a message and left out of the list. Each
-element is a \code{data.frame} with one row per cell in that group, a \code{cellID}
-column, and one column per child cell type of the group holding the
-cell's confidence score for that cell type (between 0 and 1, rows summing
-to 1 across the child columns).
-Each data frame also carries a \code{"settings"} attribute recording how it
-was computed (\code{nBoot}, \code{nPerClass}, \code{classifier}, \code{priors},
-\code{correctedCounts}, \code{ntree}, the group's \code{seed}, its \code{children} and the
-\code{fuzzyCellVersion}).
+A list with one data frame per group, named by group. Each has one
+row per cell of the group: a \code{cellID} column, and one column per child cell
+type with the cell's confidence in it (between 0 and 1; each row sums to
+1). A \code{"settings"} attribute records how it was computed (\code{nBoot},
+\code{nPerClass}, \code{classifier}, \code{priors}, \code{correctedCounts},
+\code{ntree}, the group's \code{children} and the \code{fuzzyCellVersion}).
+Groups with no cells, or with only one cell type present, cannot be
+bootstrapped: they are skipped with a message.
 }
 \description{
-For each group in \code{cellTypeTree} that has children (see \link{cellTypeTree}),
-runs \code{\link[=bootstrapClassify]{bootstrapClassify()}} on that group's cells to get, for every cell, a
-confidence score for each of the group's child cell types. The result is
-the \code{confList} used by the downstream analyses, such as
-\code{\link[=runProportionsPipeline]{runProportionsPipeline()}} and \code{\link[=runColocalisationModels]{runColocalisationModels()}}. Cell types without a
-group (ungrouped leaves) are not refined and keep hard labels.
+For each group in \code{cellTypeTree} that has children (see
+\link{cellTypeTree}), runs \code{\link[=bootstrapClassify]{bootstrapClassify()}}
+on that group's cells to get, for every cell, a confidence score for each of
+the group's child cell types. The result is the \code{confList} used by the
+downstream analyses, such as
+\code{\link[=runProportionsPipeline]{runProportionsPipeline()}} and
+\code{\link[=runColocalisationModels]{runColocalisationModels()}}. Cell types
+without a group (ungrouped leaves) are not refined and keep hard labels.
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
-confList = bootstrapLineageConfidence(lungSubset, lungCellTypeTree, nBoot = 5,
-    seed = 1)
+set.seed(1)
+confList <- bootstrapLineageConfidence(lungSubset, lungCellTypeTree,
+    nBoot = 5)
 names(confList)
 head(confList[["Endothelial lineage"]])
 
 # the same call with nBoot = 20 gives the confidences in `lungConfList`
+}
+\seealso{
+\code{\link[=crossfitLineageProbabilities]{crossfitLineageProbabilities()}} for
+cross-fitted classifier probabilities, an alternative to the bootstrap. The
+bootstrap measures how stable each cell's label is when its counts are
+resampled; cross-fitting gives each cell the probability of each subtype
+from a classifier that did not see the cell, and trains fewer classifiers.
+Either result can be passed as \code{confList} to the downstream analyses.
 }

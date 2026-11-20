@@ -24,9 +24,19 @@ vignette: >
 
 # Overview
 
-Cell type annotation in spatial transcriptomics data is subject to considerable uncertainty. Transcript diffusion and imperfect segmentation assign transcripts to neighbouring cells, and limited gene panels yield sparse expression profiles, so closely related subtypes such as CD4+ and CD8+ T cells are frequently misclassified. Downstream analyses nonetheless typically treat annotations as fixed, and this uncertainty propagates, unaccounted for, into estimates of cell type proportions, co-localisation and niche composition.
+Cell type annotation in spatial transcriptomics data can be inherently uncertain. Transcript diffusion, imperfect segmentation, sparsity and inconsistencies between different annotation strategies can all lead to cells being assigned the wrong label, particularly between closely related subtypes such as CD4+ and CD8+ T cells. Downstream analyses nonetheless typically treat annotations as fixed, and this uncertainty propagates, unaccounted for, into downstream analysis such as cell type proportions, co-localisation and niche composition.
 
-*fuzzyCell* quantifies this uncertainty by bootstrapping. Within each group of closely related subtypes, a classifier is trained on the original annotations, and each cell is repeatedly reclassified after multinomial resampling of its transcript counts. The proportion of resamples in which a cell is assigned to a subtype defines its **confidence** in that subtype. These confidences serve as **soft cell type weights**: each cell contributes to every subtype of its group in proportion to its confidence, rather than to a single label. Each analysis can be performed with the original annotations (*unweighted*) and with the confidence weights (*weighted*), and comparing the two identifies conclusions that are sensitive to annotation uncertainty.
+*fuzzyCell* addresses this problem in two stages:
+
+- If needed, it can quantify the uncertainty that is associated between closely related subtypes. Users are also able to include or use uncertainty scores from external methods.
+- It then propagates these scores into three downstream analysis tasks: 
+    - proportions
+    - co-localisation between pairs of cell types
+    - niche/domain detection
+
+In the first stage, *fuzzyCell* trains a classifier between each group of closely related subtypes. To do this, it requires a cell type hierarchy defined by the user. "Closely related subtypes" here refers to cell types that sit together under the same parent in this hierarchy (for example, CD4+ and CD8+ T cells under T cells), and are therefore likely to be confused with one another. Uncertainty is quantified by bootstrapping: the classifier is trained on the original annotations, and each cell is repeatedly reclassified after multinomial resampling of its transcript counts. The proportion of resamples in which a cell is assigned to a subtype defines its **confidence** in that subtype. These confidence scores serve as **soft cell type weights**: each cell contributes to every subtype of its group in proportion to its confidence, rather than to a single label. Each analysis can be performed with the original annotations (*unweighted*) and with the confidence weights (*weighted*), and comparing the two identifies conclusions that are sensitive to annotation uncertainty. 
+
+Below is a summary of *fuzzyCell*'s downstream tasks:
 
 | If you want to know... | Use | Built on |
 |:-------------------------------------|:----------------|:----------------|
@@ -58,11 +68,11 @@ library(SpatialExperiment)
 library(ggplot2)
 
 data(lungSubset)
-spe = lungSubset
+spe <- lungSubset
 spe
 
 # one image (and one outcome) per patient
-imageOutcome = unique(colData(spe)[, c("imageID", "disease_status")])
+imageOutcome <- unique(colData(spe)[, c("imageID", "disease_status")])
 table(imageOutcome$disease_status)
 ```
 
@@ -73,60 +83,72 @@ Any `SummarizedExperiment` (such as a `SpatialExperiment`) works as long as it h
 
 # The cell type tree
 
-Confidence scores are estimated only between closely related cell types, so *fuzzyCell* requires a hierarchy specifying which subtypes may be confused with one another. The hierarchy is supplied as a nested list. A group of subtypes to be refined together is specified as `list(children = ...)`; every other entry is either an organisational level (such as the lineage `"Immune"`) or a leaf cell type that is not refined (such as `"SMCs/Pericytes"`). Each top-level entry must be named. The cell type tree for the lung data is defined as follows:
+Confidence scores are estimated only between closely related cell types, so *fuzzyCell* requires a hierarchy specifying which subtypes may be confused with one another. The hierarchy is supplied as a nested list. A group of subtypes to be refined together is specified as `list(children = ...)`; every other entry is either an organisational level (such as the lineage `"Immune"`) or a leaf cell type that is not refined (such as `"SMCs/Pericytes"`). Each top-level entry must be named. We define the cell type tree for the lung data as follows:
 
 ```{r}
 #| label: tree
-tree = list(
+tree <- list(
     "Immune" = list(
         "Myeloid" = list(
             "Macrophage lineage" = list(children = c("Alveolar Macrophages",
                 "Interstitial Macrophages", "SPP1+ Macrophages",
                 "Macrophages - IFN-activated", "Monocytes/MDMs")),
             "Dendritic cells" = list(children = c("cDCs", "Migratory DCs",
-                "Langerhans cells", "pDCs")),
-            "Granulocytes" = list(children = c("Mast", "Basophils", "Neutrophils")),
+                "pDCs")),
+            "Granulocytes" = list(children = c("Mast", "Basophils",
+                "Neutrophils")),
             "Proliferating Myeloid"),
         "Lymphoid" = list(
-            "T cells" = list(children = c("CD4+ T-cells", "CD8+ T-cells", "Tregs",
-                "Proliferating T-cells")),
-            "NK lineage" = list(children = c("NK/NKT", "Proliferating NK/NKT")),
-            "B lineage" = list(children = c("B cells", "Plasma",
-                "Proliferating B cells")))),
+            "T cells" = list(children = c("CD4+ T-cells", "CD8+ T-cells",
+                "Tregs")),
+            "B lineage" = list(children = c("B cells", "Plasma")),
+            "NK/NKT")),
     "Mesenchymal" = list(
-        "Fibroblast lineage" = list(children = c("Alveolar FBs", "Adventitial FBs",
-            "Activated Fibrotic FBs", "Inflammatory FBs", "Subpleural FBs",
-            "Proliferating FBs", "Myofibroblasts")),
-        "SMCs/Pericytes",
-        "Mesothelial"),
-    "Endothelial lineage" = list(children = c("Arteriole", "Venous", "Capillary",
-        "Lymphatic")),
+        "Fibroblast lineage" = list(children = c("Alveolar FBs",
+            "Adventitial FBs", "Activated Fibrotic FBs", "Inflammatory FBs",
+            "Subpleural FBs", "Proliferating FBs", "Myofibroblasts")),
+        "SMCs/Pericytes"),
+    "Endothelial lineage" = list(children = c("Arteriole", "Venous",
+        "Capillary", "Lymphatic")),
     "Epithelial lineage" = list(
         "Alveolar" = list(children = c("AT1", "AT2", "Transitional AT2",
             "Proliferating AT2")),
-        "Airway" = list(children = c("Basal", "Secretory", "Goblet", "Multiciliated",
-            "RASC", "PNEC", "KRT5-/KRT17+", "Proliferating Airway"))))
+        "Airway" = list(children = c("Basal", "Secretory", "Goblet",
+            "Multiciliated", "RASC", "KRT5-/KRT17+"))))
+```
+
+`buildCellTypeMap()` checks that the tree is valid and flattens it into a table mapping each cell type to its group and lineage. Its `groupsWithChildren` element lists the groups of closely related subtypes for which *fuzzyCell* will estimate confidence scores:
+
+```{r}
 buildCellTypeMap(tree)$groupsWithChildren
 ```
 
-The same tree is included in the package and can be loaded with `data(lungCellTypeTree)`. Each of the groups listed above can receive confidence scores. Cell types outside a group, such as `SMCs/Pericytes` and `Mesothelial`, are not refined and retain their original labels.
+The same tree is included in the package and can be loaded with `data(lungCellTypeTree)`. 
 
 # Bootstrap confidence
 
-`bootstrapLineageConfidence()` does the work, group by group, as described in the Overview. Within each group it uses ridge multinomial logistic regression on the first 50 principal components of the group's cells (`classifier = "pcaLogistic"`, the default, and what we use here). `"logistic"` fits it on all genes. Other available classifiers include random forest (`"rf"`), linear discriminant analysis (`"lda"`) and support vector machines (`"svm"`).
+`bootstrapLineageConfidence()` takes the above cell type tree and the raw transcript counts as input and then generates confidence scores for every cell in 3 steps:
 
-The classifier is trained with the same number of cells of each subtype, which gives every subtype the same prior. `priors = "observed"` instead weights each subtype by its share of the group's cells.
-
-We use 20 resamples to keep the vignette quick, but we encourage at least 100 for your own analysis.
+- It trains a classifier (by default, ridge multinomial logistic regression on the first 50 principal components) within each group of closely related subtypes, using the original annotations as labels and the same number of cells from each subtype.
+- It then repeatedly bootstraps each cell's raw transcript counts (resampling its transcripts with replacement, keeping its total count fixed), and predicts a label for each bootstrapped profile using the trained classifier.
+- A cell's confidence score for each subtype is defined as the proportion of bootstrap resamples in which it is assigned to that subtype, so its scores sum to 1 across the subtypes of its group.
 
 ```{r}
 #| label: bootstrap
 #| results: hide
-confList = bootstrapLineageConfidence(spe, tree, nBoot = 20, classifier = "pcaLogistic",
-    seed = 1)
+set.seed(1)
+confList <- bootstrapLineageConfidence(spe, 
+                                       tree, nBoot = 20, classifier = "pcaLogistic")
 ```
 
-The result, `confList`, is a list with one data frame per group. Each data frame has one row per cell in the group, a `cellID` column, and one column per subtype holding that cell's confidence in it (between 0 and 1, adding up to 1 across the subtypes):
+The result, `confList`, is a list with one data frame per group. Let's investigate what the confidence scores look like for the Macrophage group: 
+
+```{r}
+confList$`Macrophage lineage`
+```
+
+
+Each data frame has one row per cell in the group, a `cellID` column, and one column per subtype holding that cell's confidence in it (between 0 and 1, adding up to 1 across the subtypes):
 
 ```{r}
 #| label: confhead
@@ -141,9 +163,9 @@ How spread out are the confidences? Here are the scores for the subtypes of two 
 #| fig-height: 6
 #| fig-width: 6
 #| fig-alt: "Histograms of each subtype's confidence scores, for the B lineage and the endothelial cells."
-groups = c("B lineage", "Endothelial lineage")
-scores = do.call(rbind, lapply(groups, function(g) {
-    conf = confList[[g]]
+groups <- c("B lineage", "Endothelial lineage")
+scores <- do.call(rbind, lapply(groups, function(g) {
+    conf <- confList[[g]]
     do.call(rbind, lapply(setdiff(names(conf), "cellID"), function(subtype)
         data.frame(panel = paste0(g, ": ", subtype), confidence = conf[[subtype]])))
 }))
@@ -167,7 +189,7 @@ In the results, `estimate` is the difference in proportion for the second level 
 ```{r}
 #| label: props
 #| results: hide
-props = runProportionsPipeline(spe, tree, confList,
+props <- runProportionsPipeline(spe, tree, confList,
     outcomeCol = "disease_status", subject = "subject")
 ```
 
@@ -181,7 +203,7 @@ For most cell types the weighted and unweighted analyses agree. Arterioles are o
 
 ```{r}
 #| label: propscompare
-cols = c("cellType", "estimate", "p.value", "p.adj")
+cols <- c("cellType", "estimate", "p.value", "p.adj")
 rbind(
     unweighted = subset(props$modelUnweighted, cellType == "Arteriole")[, cols],
     weighted = subset(props$modelWeighted, cellType == "Arteriole")[, cols])
@@ -217,17 +239,17 @@ Marker expression helps to judge whether the confidences are sensible. Here is t
 #| label: imgmarkers
 #| fig-height: 4
 #| fig-width: 6
-plotOneMarkerSpatial(spe, "VUHD113", "Endothelial lineage", "HEY1", cellTypeTree = tree)
+plotOneMarkerSpatial(spe, tree, "VUHD113", "Endothelial lineage", "HEY1")
 ```
 
 ```{r}
 #| label: hey1
 #| echo: false
-endo = confList[["Endothelial lineage"]]
-endo = endo[endo$cellID %in% spe$cellID[spe$imageID == "VUHD113"], ]
-hey1 = counts(spe)["HEY1", endo$cellID] > 0
-label = spe$cellType[match(endo$cellID, spe$cellID)]
-pct = function(x) paste0(round(100 * mean(x)), "%")
+endo <- confList[["Endothelial lineage"]]
+endo <- endo[endo$cellID %in% spe$cellID[spe$imageID == "VUHD113"], ]
+hey1 <- counts(spe)["HEY1", endo$cellID] > 0
+label <- spe$cellType[match(endo$cellID, spe$cellID)]
+pct <- function(x) paste0(round(100 * mean(x)), "%")
 ```
 
 HEY1 expression is concentrated in the same vessels as the cells with high arteriole confidence, and is largely absent from the rest of the endothelium. In this image HEY1 is detected in `r pct(hey1[label == "Arteriole"])` of the cells labelled as arterioles and in `r pct(hey1[label != "Arteriole"])` of the other endothelial cells. It is detected in `r pct(hey1[endo$Arteriole >= 0.5])` of the cells with an arteriole confidence of at least 0.5, compared with `r pct(hey1[endo$Arteriole == 0])` of the cells with none, so the confidences are consistent with the marker.
@@ -241,7 +263,7 @@ The proportion of a subtype among all cells can change simply because its whole 
 ```{r}
 #| label: relprops
 #| eval: false
-relProps = runProportionsRelativeToParentPipeline(spe, tree, confList,
+relProps <- runProportionsRelativeToParentPipeline(spe, tree, confList,
     outcomeCol = "disease_status", subject = "subject")
 ```
 
@@ -256,7 +278,7 @@ The confidence weights themselves are returned by `confidenceWeights()` as a mat
 ```{r}
 #| label: coloc
 #| results: hide
-coloc = runColocalisationModels(spe, tree, confList,
+coloc <- runColocalisationModels(spe, tree, confList,
     outcomeCol = "disease_status", subject = "subject", r = 50)
 ```
 
@@ -285,7 +307,7 @@ The difference is largely driven by the `Control` samples showing increased attr
 #| fig-height: 4.5
 #| fig-width: 6.5
 # the two cell types with their original labels
-plotHardSpatialPair(spe, "VUHD113", "Mast", "Proliferating FBs", tree)
+plotHardSpatialPair(spe, tree, "VUHD113", "Mast", "Proliferating FBs")
 
 # the same two cell types, weighted by their confidences
 plotWeightedSpatialPair(spe, tree, confList, "VUHD113", "Granulocytes", "Mast",
@@ -295,14 +317,14 @@ plotWeightedSpatialPair(spe, tree, confList, "VUHD113", "Granulocytes", "Mast",
 ```{r}
 #| label: vuhd113
 #| echo: false
-img = spe$imageID == "VUHD113"
-xy = SpatialExperiment::spatialCoords(spe)[img, ]
-label = spe$cellType[img]
-mast = label == "Mast"
-fb = confList[["Fibroblast lineage"]]
-weight = setNames(fb[["Proliferating FBs"]], fb$cellID)[spe$cellID[img]]
-weight[is.na(weight)] = 0
-nearMast = apply(xy, 1, function(p) any(sqrt(colSums((t(xy[mast, ]) - p)^2)) <= 50))
+img <- spe$imageID == "VUHD113"
+xy <- SpatialExperiment::spatialCoords(spe)[img, ]
+label <- spe$cellType[img]
+mast <- label == "Mast"
+fb <- confList[["Fibroblast lineage"]]
+weight <- setNames(fb[["Proliferating FBs"]], fb$cellID)[spe$cellID[img]]
+weight[is.na(weight)] <- 0
+nearMast <- apply(xy, 1, function(p) any(sqrt(colSums((t(xy[mast, ]) - p)^2)) <= 50))
 ```
 
 With the original labels, the image contains only `r sum(label == "Proliferating FBs")` proliferating fibroblasts, none of which lie within 50 µm of any of its `r sum(mast)` mast cells, so the L-function for the pair is at its minimum. With the confidences, proliferating-fibroblast weight (blue) is spread across `r sum(weight > 0)` fibroblast-lineage cells. Of the `r sum(weight >= 0.5)` cells with a confidence of at least 0.5, `r sum(weight >= 0.5 & label == "Alveolar FBs")` are labelled as alveolar fibroblasts, and `r sum(weight > 0 & nearMast)` of the weighted cells lie within 50 µm of a mast cell, which produces the apparent attraction. The mast cells (red) keep high confidences after weighting, so the change comes almost entirely from the fibroblasts.
@@ -314,7 +336,7 @@ Niches are recurring local neighbourhoods: groups of cells that share a similar 
 ```{r}
 #| label: niches
 #| results: hide
-niches = runNicheIdentification(spe, tree, confList, r = c(20, 50), k = 8)
+niches <- runNicheIdentification(spe, tree, confList, r = c(20, 50), k = 8)
 ```
 
 The niche plots take the niche assignments returned by `runNicheIdentification()`. `nicheCompositionMap()` shows which cell types are enriched in each niche, here for the unweighted (left) and weighted (right) niches:
@@ -337,7 +359,7 @@ An alluvial plot, drawn here with the ggalluvial package, shows how cells move b
 #| fig-height: 5
 #| fig-width: 6.5
 library(ggalluvial)
-flows = as.data.frame(table(unweighted = niches$nicheUnweighted,
+flows <- as.data.frame(table(unweighted = niches$nicheUnweighted,
     weighted = niches$nicheWeighted), responseName = "cells")
 ggplot(flows, aes(axis1 = unweighted, axis2 = weighted, y = cells)) +
     geom_alluvium(aes(fill = unweighted), width = 1/4) +
@@ -351,8 +373,8 @@ ggplot(flows, aes(axis1 = unweighted, axis2 = weighted, y = cells)) +
 ```{r}
 #| label: nichemoves
 #| echo: false
-moves = table(niches$nicheUnweighted, niches$nicheWeighted)
-share = function(from, to) paste0(round(100 * moves[from, to] / sum(moves[from, ])), "%")
+moves <- table(niches$nicheUnweighted, niches$nicheWeighted)
+share <- function(from, to) paste0(round(100 * moves[from, to] / sum(moves[from, ])), "%")
 ```
 
 The split of the alveolar niche is visible as flows of cells: the unweighted `niche8` divides between the weighted `niche8` (`r share("niche8", "niche8")`), `niche1` (`r share("niche8", "niche1")`) and `niche4` (`r share("niche8", "niche4")`).
@@ -370,7 +392,7 @@ The proportion of each niche can be tested against the outcome in the same way a
 
 ```{r}
 #| label: nichetest
-nicheTests = testNicheOutcome(spe, niches$nicheUnweighted,
+nicheTests <- testNicheOutcome(spe, niches$nicheUnweighted,
     niches$nicheWeighted, outcomeCol = "disease_status", subject = "subject")
 nicheTests$testWeighted
 nicheTests$testUnweighted
@@ -380,14 +402,14 @@ A positive estimate means that the niche is more common in disease. Without weig
 
 # Practical notes
 
-- **Use at least 100 bootstraps** (`nBoot`) for real analyses, and set `seed` so the confidences can be reproduced.
-- **Large datasets:** `cores` runs the bootstrap on several cores, and `subprocess = TRUE` runs each group in a fresh R session, which keeps the workers small. The analysis functions take `cores` too.
+- **Use at least 100 bootstraps** (`nBoot`) for real analyses, and call `set.seed()` before `bootstrapLineageConfidence()` so the confidences can be reproduced.
+- **Large datasets:** `cores` runs the bootstrap on several cores. The analysis functions take `cores` too.
 - **An alternative to the bootstrap:** `crossfitLineageProbabilities()` returns cross-fitted class probabilities in the same format as `bootstrapLineageConfidence()`, so they can be used in exactly the same way.
 - **Your own pipeline:** `confidenceWeights()` gives the cells-by-labels weight matrix for any function that takes `cellWeights`, such as `spicyR::spicy()` and `lisaClust::lisa()`.
 
 # References
 
-- Vannan et al. (2025). Xenium spatial transcriptomics of pulmonary fibrosis and control lung biopsies, available as `SpatialDatasets::spe_Vannan_2025()`; the subset used here is `lungSubset`.
+- Vannan et al. (2025). Spatial transcriptomics identifies molecular niche dysregulation associated with distal lung remodeling in pulmonary fibrosis. *Nature Genetics* 57, 647–658. <https://doi.org/10.1038/s41588-025-02080-x>. The data are available as `SpatialDatasets::spe_Vannan_2025()`; the subset used here is `lungSubset`.
 - [spicyR](https://bioconductor.org/packages/spicyR): spatial linear and mixed-effects modelling of cell co-localisation.
 - [lisaClust](https://bioconductor.org/packages/lisaClust): clustering of local indicators of spatial association.
 - [Statial](https://bioconductor.org/packages/Statial): the Kontextual measure of relative co-localisation.

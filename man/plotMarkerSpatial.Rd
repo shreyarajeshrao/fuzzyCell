@@ -8,17 +8,18 @@
 \usage{
 plotOneMarkerSpatial(
   spe,
+  cellTypeTree,
   imageID,
   group,
   marker,
   colour = "purple",
-  cellTypeTree = NULL,
   cellSize = 1,
   assayName = "counts"
 )
 
 plotTwoMarkerSpatial(
   spe,
+  cellTypeTree,
   imageID,
   groupA,
   markerA,
@@ -26,15 +27,17 @@ plotTwoMarkerSpatial(
   groupB,
   markerB,
   colourB = "green",
-  cellTypeTree = NULL,
   cellSize = 1,
   assayName = "counts"
 )
 }
 \arguments{
-\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with a cell
-ID, cell type, image and coordinates for every cell in the form given by
-\code{\link[=getCellData]{getCellData()}}, and a counts assay.}
+\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with
+a cell ID, cell type, image and coordinates for every cell in the form
+given by \code{\link[=getCellData]{getCellData()}}, and a counts assay.}
+
+\item{cellTypeTree}{A cell type tree, used to find the cells of each group,
+or \code{NULL} if \code{colData(spe)} already has a \code{group} column.}
 
 \item{imageID}{The image to plot.}
 
@@ -44,28 +47,27 @@ ID, cell type, image and coordinates for every cell in the form given by
 
 \item{colour, colourA, colourB}{Colour(s) used for the shading.}
 
-\item{cellTypeTree}{A cell type tree, used to find the cells of each group.
-It is needed unless \code{colData(spe)} already has a \code{group} column.}
-
 \item{cellSize}{Size of the highlighted cells, the ones drawn in colour. The
 grey background cells always have size 0.7.}
 
-\item{assayName}{Name of the assay with the counts. Expression is normalised
-by each cell's library size.}
+\item{assayName}{Name of the assay with the counts.}
 }
 \value{
 A \code{ggplot} object.
 }
 \description{
-Plots one image, with the cells of a group shaded by the (library-size
-normalised, rescaled) expression of one or two markers.
+Plots one image, with the cells of a group shaded by the expression of one
+marker (\code{plotOneMarkerSpatial()}), or the cells of two groups each shaded
+by the expression of its own marker (\code{plotTwoMarkerSpatial()}). Expression
+is normalised by each cell's library size, then rescaled to 0-1 within the
+group, so that the shading uses its full range.
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
-plotOneMarkerSpatial(lungSubset, "VUHD113", "Endothelial lineage", "HEY1",
-    cellTypeTree = lungCellTypeTree)
-plotTwoMarkerSpatial(lungSubset, "VUHD113", "Endothelial lineage", "PECAM1",
-    "purple", "Fibroblast lineage", "COL1A1", "green",
-    cellTypeTree = lungCellTypeTree)
+plotOneMarkerSpatial(lungSubset, lungCellTypeTree, "VUHD113",
+    "Endothelial lineage", "HEY1")
+plotTwoMarkerSpatial(lungSubset, lungCellTypeTree, "VUHD113",
+    "Endothelial lineage", "PECAM1", "purple", "Fibroblast lineage",
+    "COL1A1", "green")
 }

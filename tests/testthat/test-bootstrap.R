@@ -1,61 +1,66 @@
 ## small hand-made count matrix: two classes with different marker genes
-makeCounts = function(nPerClass = 40, nGenes = 8) {
+makeCounts <- function(nPerClass = 40, nGenes = 8) {
     set.seed(1)
-    labels = rep(c("A", "B"), each = nPerClass)
-    mu = matrix(1, 2 * nPerClass, nGenes)
-    mu[labels == "A", 1:3] = 6
-    mu[labels == "B", 4:6] = 6
-    counts = matrix(stats::rpois(length(mu), mu), nrow = length(labels))
-    colnames(counts) = paste0("g", seq_len(nGenes))
+    labels <- rep(c("A", "B"), each = nPerClass)
+    mu <- matrix(1, 2 * nPerClass, nGenes)
+    mu[labels == "A", 1:3] <- 6
+    mu[labels == "B", 4:6] <- 6
+    counts <- matrix(stats::rpois(length(mu), mu), nrow = length(labels))
+    colnames(counts) <- paste0("g", seq_len(nGenes))
     list(counts = counts, labels = labels)
 }
 
 test_that("bootstrapClassify returns row-stochastic confidences", {
-    d = makeCounts()
-    freq = suppressMessages(suppressWarnings(
-        bootstrapClassify(d$counts, d$labels, nBoot = 5, seed = 1)))
+    d <- makeCounts()
+    freq <- suppressMessages(suppressWarnings(
+        bootstrapClassify(d$counts, d$labels, nBoot = 5)))
     expect_equal(dim(freq), c(80, 2))
     expect_equal(unname(rowSums(freq)), rep(1, 80))
     expect_setequal(colnames(freq), c("A", "B"))
 })
 
-test_that("bootstrapClassify is reproducible given a seed", {
-    d = makeCounts()
-    f1 = suppressMessages(suppressWarnings(
-        bootstrapClassify(d$counts, d$labels, nBoot = 5, seed = 1)))
-    f2 = suppressMessages(suppressWarnings(
-        bootstrapClassify(d$counts, d$labels, nBoot = 5, seed = 1)))
+test_that("bootstrapClassify is reproducible after set.seed()", {
+    d <- makeCounts()
+    run <- function() suppressMessages(suppressWarnings(
+        bootstrapClassify(d$counts, d$labels, nBoot = 5)))
+    set.seed(1)
+    f1 <- run()
+    set.seed(1)
+    f2 <- run()
     expect_equal(f1, f2)
+    # without resetting the seed, the next run differs
+    expect_false(isTRUE(all.equal(run(), f1)))
 })
 
 test_that("bootstrapClassify recovers well-separated classes", {
-    d = makeCounts()
-    freq = suppressMessages(suppressWarnings(
-        bootstrapClassify(d$counts, d$labels, nBoot = 10, seed = 1)))
-    assigned = colnames(freq)[max.col(freq)]
+    d <- makeCounts()
+    freq <- suppressMessages(suppressWarnings(
+        bootstrapClassify(d$counts, d$labels, nBoot = 10)))
+    assigned <- colnames(freq)[max.col(freq)]
     expect_gt(mean(assigned == d$labels), 0.9)
 })
 
-test_that("bootstrapClassify errors clearly on classes with fewer than 2 cells", {
-    d = makeCounts()
-    labels = d$labels
-    labels[1] = "singleton"
+test_that("bootstrapClassify errors clearly on classes with fewer than 2 cells",
+    {
+    d <- makeCounts()
+    labels <- d$labels
+    labels[1] <- "singleton"
     expect_error(
         suppressMessages(bootstrapClassify(d$counts, labels, nBoot = 2)),
         "'singleton' has 1")
 })
 
 test_that("bootstrapClassify rejects counts that are not raw integers", {
-    d = makeCounts()
+    d <- makeCounts()
     expect_error(
         bootstrapClassify(log1p(d$counts), d$labels, nBoot = 2),
         "raw non-negative integer counts")
-    withNA = d$counts
-    withNA[1, 1] = NA
+    withNA <- d$counts
+    withNA[1, 1] <- NA
     expect_error(bootstrapClassify(withNA, d$labels, nBoot = 2),
         "raw non-negative integer counts")
-    negative = d$counts
-    negative[1, 1] = -1
+    negative <- d$counts
+    negative[1, 1] <- -1
     expect_error(bootstrapClassify(negative, d$labels, nBoot = 2),
         "raw non-negative integer counts")
     expect_error(bootstrapClassify(d$counts[-1, ], d$labels, nBoot = 2),
@@ -63,77 +68,54 @@ test_that("bootstrapClassify rejects counts that are not raw integers", {
 })
 
 test_that("whole numbers stored as doubles are accepted", {
-    d = makeCounts()
-    shaky = d$counts * 0.1 / 0.1  # floating-point error, still whole numbers
-    freq = suppressMessages(suppressWarnings(
-        bootstrapClassify(shaky, d$labels, nBoot = 2, seed = 1)))
+    d <- makeCounts()
+    shaky <- d$counts * 0.1 / 0.1  # floating-point error, still whole numbers
+    freq <- suppressMessages(suppressWarnings(
+        bootstrapClassify(shaky, d$labels, nBoot = 2)))
     expect_equal(dim(freq), c(80, 2))
 })
 
 test_that("bootstrapClassify errors when no gene varies", {
-    d = makeCounts()
+    d <- makeCounts()
     expect_error(
         suppressMessages(bootstrapClassify(d$counts * 0, d$labels, nBoot = 2)),
         "zero variance")
 })
 
 test_that("bootstrapLineageConfidence records its settings", {
-    d = makeCounts()
-    se = SummarizedExperiment::SummarizedExperiment(
+    d <- makeCounts()
+    se <- SummarizedExperiment::SummarizedExperiment(
         list(counts = t(d$counts)),
-        colData = S4Vectors::DataFrame(cellID = paste0("c", 1:80),
+        colData = data.frame(cellID = paste0("c", 1:80),
             cellType = d$labels))
-    tree = list(Grp = list(children = c("A", "B")))
-    conf = suppressMessages(suppressWarnings(
-        bootstrapLineageConfidence(se, tree, nBoot = 3, nPerClass = 20,
-            seed = 10)))
-    settings = attr(conf$Grp, "settings")
+    tree <- list(Grp = list(children = c("A", "B")))
+    conf <- suppressMessages(suppressWarnings(
+        bootstrapLineageConfidence(se, tree, nBoot = 3, nPerClass = 20)))
+    settings <- attr(conf$Grp, "settings")
     expect_equal(settings[c("nBoot", "nPerClass", "classifier", "priors",
-        "ntree", "seed")], list(nBoot = 3, nPerClass = 20,
-        classifier = "pcaLogistic", priors = "balanced", ntree = 500, seed = 11))
+        "ntree")], list(nBoot = 3, nPerClass = 20,
+        classifier = "pcaLogistic", priors = "balanced", ntree = 500))
     expect_setequal(settings$children, c("A", "B"))
     expect_true("fuzzyCellVersion" %in% names(settings))
 })
 
-test_that("subprocess = TRUE gives the same confidences as running in this session", {
-    d = makeCounts()
-    se = SummarizedExperiment::SummarizedExperiment(
-        list(counts = t(d$counts)),
-        colData = S4Vectors::DataFrame(cellID = paste0("c", 1:80),
-            cellType = d$labels))
-    tree = list(Grp = list(children = c("A", "B")))
-    expect_error(bootstrapLineageConfidence(se, tree, subprocess = NA),
-        "`subprocess` must be TRUE or FALSE")
-    run = function(subprocess) suppressMessages(suppressWarnings(
-        bootstrapLineageConfidence(se, tree, nBoot = 3, nPerClass = 20,
-            seed = 10, subprocess = subprocess)))
-    installed = tryCatch(utils::packageDescription("fuzzyCell",
-        lib.loc = .libPaths())$Version, warning = function(w) NULL)
-    if (is.null(installed)) {
-        expect_error(run(TRUE), "needs fuzzyCell to be installed")
-    }
-    skip_if(is.null(installed) ||
-        !identical(installed, as.character(getNamespaceVersion("fuzzyCell"))),
-        "the installed fuzzyCell is missing or a different version")
-    expect_equal(run(TRUE), run(FALSE))
-})
-
 test_that("bootstrapLineageConfidence requires a SummarizedExperiment", {
-    tree = list(Grp = list(children = c("A", "B")))
-    for (bad in list(data.frame(cellID = "a", cellType = "A"), NULL, "spe", 1)) {
+    tree <- list(Grp = list(children = c("A", "B")))
+    for (bad in list(data.frame(cellID = "a", cellType = "A"), NULL, "spe",
+        1)) {
         expect_error(bootstrapLineageConfidence(bad, tree),
             "`spe` must be a SummarizedExperiment, for example a SpatialExperiment")
     }
 })
 
 test_that("bootstrapLineageConfidence validates its input", {
-    d = makeCounts()
-    mk = function(colData, assays = list(counts = t(d$counts))) {
+    d <- makeCounts()
+    mk <- function(colData, assays = list(counts = t(d$counts))) {
         SummarizedExperiment::SummarizedExperiment(assays,
-            colData = S4Vectors::DataFrame(colData))
+            colData = colData)
     }
-    tree = list(Grp = list(children = c("A", "B")))
-    cd = data.frame(cellID = paste0("c", 1:80), cellType = d$labels)
+    tree <- list(Grp = list(children = c("A", "B")))
+    cd <- data.frame(cellID = paste0("c", 1:80), cellType = d$labels)
 
     # columns / assay that do not exist
     expect_error(bootstrapLineageConfidence(mk(cd["cellType"]), tree),
@@ -149,32 +131,38 @@ test_that("bootstrapLineageConfidence validates its input", {
         "Available columns: cellID, cellType")
 
     # arguments of the wrong type
-    expect_error(bootstrapLineageConfidence(mk(cd), tree, cellType = c("a", "b")),
+    expect_error(bootstrapLineageConfidence(mk(cd), tree, cellType = c("a",
+        "b")),
         "`cellType` must be a single string")
-    expect_error(bootstrapLineageConfidence(mk(cd), tree, cellID = NA_character_),
+    expect_error(bootstrapLineageConfidence(mk(cd), tree,
+        cellID = NA_character_),
         "`cellID` must be a single string")
     expect_error(bootstrapLineageConfidence(mk(cd), tree, assayName = 1),
         "`assayName` must be a single string")
 
     # cell IDs must be unique
-    dupIds = cd
-    dupIds$cellID[2] = dupIds$cellID[1]
+    dupIds <- cd
+    dupIds$cellID[2] <- dupIds$cellID[1]
     expect_error(bootstrapLineageConfidence(mk(dupIds), tree),
         "unique, non-missing cell IDs \\(e.g. 'c1' is repeated\\)")
 })
 
-test_that("custom column and assay names give the same result as the defaults", {
-    d = makeCounts()
-    tree = list(Grp = list(children = c("A", "B")))
-    se = SummarizedExperiment::SummarizedExperiment(list(counts = t(d$counts)),
-        colData = S4Vectors::DataFrame(cellID = paste0("c", 1:80),
+test_that("custom column and assay names give the same result as the defaults",
+    {
+    d <- makeCounts()
+    tree <- list(Grp = list(children = c("A", "B")))
+    se <- SummarizedExperiment::SummarizedExperiment(list(counts = t(d$counts)),
+        colData = data.frame(cellID = paste0("c", 1:80),
             cellType = d$labels))
-    custom = SummarizedExperiment::SummarizedExperiment(
+    custom <- SummarizedExperiment::SummarizedExperiment(
         list(raw = t(d$counts)),
-        colData = S4Vectors::DataFrame(barcode = paste0("c", 1:80),
+        colData = data.frame(barcode = paste0("c", 1:80),
             ct = d$labels))
-    run = function(...) suppressMessages(suppressWarnings(
-        bootstrapLineageConfidence(..., nBoot = 3, seed = 1)))
+    run <- function(...) {
+        set.seed(1)
+        suppressMessages(suppressWarnings(bootstrapLineageConfidence(...,
+            nBoot = 3)))
+    }
     expect_equal(
         run(custom, tree, cellType = "ct", cellID = "barcode",
             assayName = "raw"),
@@ -182,21 +170,21 @@ test_that("custom column and assay names give the same result as the defaults", 
 })
 
 test_that("groups that cannot be bootstrapped are skipped with a message", {
-    d = makeCounts()
-    se = SummarizedExperiment::SummarizedExperiment(list(counts = t(d$counts)),
-        colData = S4Vectors::DataFrame(cellID = paste0("c", 1:80),
+    d <- makeCounts()
+    se <- SummarizedExperiment::SummarizedExperiment(list(counts = t(d$counts)),
+        colData = data.frame(cellID = paste0("c", 1:80),
             cellType = d$labels))
     # "Ghost" has no cells in the data
-    tree = list(Grp = list(children = c("A", "B")),
+    tree <- list(Grp = list(children = c("A", "B")),
         Ghost = list(children = c("X", "Y")))
     expect_message(
         conf <- suppressWarnings(bootstrapLineageConfidence(se, tree,
-            nBoot = 2, seed = 1)),
+            nBoot = 2)),
         "skipping: no cells in the data")
     expect_named(conf, "Grp")
 
     # "Solo" only has cells of one of its cell types (A; there are no Q)
-    solo = list(Solo = list(children = c("A", "Q")), Other = "B")
+    solo <- list(Solo = list(children = c("A", "Q")), Other = "B")
     expect_message(
         expect_error(bootstrapLineageConfidence(se, solo),
             "None of the groups could be bootstrapped"),
@@ -204,18 +192,19 @@ test_that("groups that cannot be bootstrapped are skipped with a message", {
 })
 
 test_that("all classifiers run", {
-    d = makeCounts()
+    d <- makeCounts()
     for (cl in c("lda", "svm", "rf")) {
-        freq = suppressMessages(suppressWarnings(
-            bootstrapClassify(d$counts, d$labels, nBoot = 3, seed = 1,
+        freq <- suppressMessages(suppressWarnings(
+            bootstrapClassify(d$counts, d$labels, nBoot = 3,
                 classifier = cl, ntree = 20)))
         expect_equal(unname(rowSums(freq)), rep(1, 80), info = cl)
     }
 })
 
-test_that("bootstrapLineageConfidence returns one table per group (full data)", {
+test_that("bootstrapLineageConfidence returns one table per group (full data)",
+    {
     skip_unless_full()
-    d = fullTestData()
+    d <- fullTestData()
     expect_true(all(c("T cells", "Macrophage lineage") %in%
         names(d$confList)))
     expect_true(all(c("cellID", "CD8+ T cells") %in%
@@ -223,149 +212,197 @@ test_that("bootstrapLineageConfidence returns one table per group (full data)", 
 })
 
 test_that("crossfitLineageProbabilities gives probabilities for every cell of each group", {
-    d = miniPipelineData()
-    p = suppressMessages(crossfitLineageProbabilities(d$spe, d$tree, nFolds = 3, seed = 1))
+    d <- miniPipelineData()
+    p <- suppressMessages(crossfitLineageProbabilities(d$spe, d$tree,
+        nFolds = 3))
     expect_named(p, "G")
     expect_setequal(names(p$G), c("cellID", "A", "B"))
     expect_equal(nrow(p$G), sum(d$spe$cellType %in% c("A", "B")))
     expect_equal(unname(rowSums(p$G[, c("A", "B")])), rep(1, nrow(p$G)))
     # A and B differ in genes 1-3 vs 4-6: most cells get their own label
-    own = ifelse(d$spe$cellType[match(p$G$cellID, d$spe$cellID)] == "A", p$G$A, p$G$B)
+    own <- ifelse(d$spe$cellType[match(p$G$cellID, d$spe$cellID)] == "A", p$G$A,
+        p$G$B)
     expect_gt(mean(own > 0.5), 0.7)
 })
 
 test_that("observed priors move fewer cells into a rare class", {
     set.seed(5)
-    n = c(A = 400, B = 40)
-    lab = rep(names(n), n)
-    mu = rbind(A = c(3, 3, 1, 1), B = c(2, 2, 2, 2))
-    counts = t(vapply(lab, function(l) rpois(4, mu[l, ] * 3), numeric(4)))
-    colnames(counts) = paste0("g", 1:4)
-    bal = suppressMessages(bootstrapClassify(counts, lab, nBoot = 10, seed = 1))
-    obs = suppressMessages(bootstrapClassify(counts, lab, nBoot = 10, seed = 1, priors = "observed"))
+    n <- c(A = 400, B = 40)
+    lab <- rep(names(n), n)
+    mu <- rbind(A = c(3, 3, 1, 1), B = c(2, 2, 2, 2))
+    counts <- t(vapply(lab, function(l) rpois(4, mu[l, ] * 3), numeric(4)))
+    colnames(counts) <- paste0("g", 1:4)
+    bal <- suppressMessages(bootstrapClassify(counts, lab, nBoot = 10))
+    obs <- suppressMessages(bootstrapClassify(counts, lab, nBoot = 10,
+        priors = "observed"))
     expect_lt(mean(obs[lab == "A", "B"]), mean(bal[lab == "A", "B"]))
-    p1 = crossfitClassify(counts, lab, nFolds = 3, seed = 1)
-    p2 = crossfitClassify(counts, lab, nFolds = 3, seed = 1, priors = "observed")
+    p1 <- crossfitClassify(counts, lab, nFolds = 3)
+    p2 <- crossfitClassify(counts, lab, nFolds = 3, priors = "observed")
     expect_lt(sum(p2[, "B"]), sum(p1[, "B"]))
 })
 
 test_that("pcaLogistic classifies on principal components", {
-    d = miniPipelineData()
-    p = suppressMessages(crossfitLineageProbabilities(d$spe, d$tree, nFolds = 3, seed = 1, classifier = "pcaLogistic"))
-    own = ifelse(d$spe$cellType[match(p$G$cellID, d$spe$cellID)] == "A", p$G$A, p$G$B)
+    d <- miniPipelineData()
+    p <- suppressMessages(crossfitLineageProbabilities(d$spe, d$tree,
+        nFolds = 3, classifier = "pcaLogistic"))
+    own <- ifelse(d$spe$cellType[match(p$G$cellID, d$spe$cellID)] == "A", p$G$A,
+        p$G$B)
     expect_gt(mean(own > 0.5), 0.7)
-    b = suppressMessages(bootstrapLineageConfidence(d$spe, d$tree, nBoot = 3, seed = 1, classifier = "pcaLogistic"))
+    b <- suppressMessages(bootstrapLineageConfidence(d$spe, d$tree, nBoot = 3,
+        classifier = "pcaLogistic"))
     expect_equal(unname(rowSums(b$G[, c("A", "B")])), rep(1, nrow(b$G)))
 })
 
 test_that("pcaLogistic fits the genes themselves when only two genes vary", {
-    d = makeCounts()
-    counts = d$counts[, c(1, 4)]
-    freq = suppressMessages(bootstrapClassify(counts, d$labels, nBoot = 5, seed = 1))
+    d <- makeCounts()
+    counts <- d$counts[, c(1, 4)]
+    freq <- suppressMessages(bootstrapClassify(counts, d$labels, nBoot = 5))
     expect_equal(unname(rowSums(freq)), rep(1, nrow(freq)))
 })
 
 test_that("an unnamed count matrix gives the same confidences as a named one", {
-    d = makeCounts()
-    unnamed = unname(d$counts)
+    d <- makeCounts()
+    unnamed <- unname(d$counts)
     for (classifier in c("pcaLogistic", "logistic")) {
-        f1 = suppressMessages(bootstrapClassify(d$counts, d$labels, nBoot = 5, seed = 1, classifier = classifier))
-        f2 = suppressMessages(bootstrapClassify(unnamed, d$labels, nBoot = 5, seed = 1, classifier = classifier))
+        set.seed(1)
+        f1 <- suppressMessages(bootstrapClassify(d$counts, d$labels, nBoot = 5,
+            classifier = classifier))
+        set.seed(1)
+        f2 <- suppressMessages(bootstrapClassify(unnamed, d$labels, nBoot = 5,
+            classifier = classifier))
         expect_equal(f2, f1)
     }
-    p1 = crossfitClassify(d$counts, d$labels, nFolds = 3, seed = 1)
-    p2 = crossfitClassify(unnamed, d$labels, nFolds = 3, seed = 1)
+    set.seed(1)
+    p1 <- crossfitClassify(d$counts, d$labels, nFolds = 3)
+    set.seed(1)
+    p2 <- crossfitClassify(unnamed, d$labels, nFolds = 3)
     expect_equal(p2, p1)
 })
 
-test_that("resampling draws each gene in proportion to its count, whole or not", {
+test_that("resampling draws each gene in proportion to its count, whole or not",
+    {
     # 6 * 0.1 / 0.1 is 6.000000000000001
-    x = rbind(c(6 * 0.1 / 0.1, 1), c(2.5, 1.5), c(0, 0))
+    x <- rbind(c(6 * 0.1 / 0.1, 1), c(2.5, 1.5), c(0, 0))
     set.seed(1)
-    draws = replicate(4000, resampleCounts(resampleLayout(x)))
+    draws <- replicate(4000, resampleCounts(resampleLayout(x)))
     expect_equal(mean(draws[1, 2, ]) / 7, 1 / 7, tolerance = 0.1)
     expect_equal(rowMeans(draws[2, , ]), c(2.5, 1.5), tolerance = 0.05)
     expect_true(all(apply(draws, 3, rowSums) == c(7, 4, 0)))
 })
 
 test_that("non-integer counts need correctedCounts = TRUE", {
-    d = makeCounts()
-    corrected = d$counts * 0.9
-    expect_error(bootstrapClassify(corrected, d$labels, nBoot = 2), "correctedCounts = TRUE")
-    freq = suppressMessages(bootstrapClassify(corrected, d$labels, nBoot = 5, seed = 1, correctedCounts = TRUE))
+    d <- makeCounts()
+    corrected <- d$counts * 0.9
+    expect_error(bootstrapClassify(corrected, d$labels, nBoot = 2),
+        "correctedCounts = TRUE")
+    freq <- suppressMessages(bootstrapClassify(corrected, d$labels, nBoot = 5,
+        correctedCounts = TRUE))
     expect_equal(unname(rowSums(freq)), rep(1, nrow(freq)))
-    negative = corrected
-    negative[1, 1] = -0.5
-    expect_error(bootstrapClassify(negative, d$labels, nBoot = 2, correctedCounts = TRUE), "non-negative")
-    expect_error(bootstrapClassify(d$counts, d$labels, nBoot = 2, correctedCounts = NA), "TRUE or FALSE")
+    negative <- corrected
+    negative[1, 1] <- -0.5
+    expect_error(bootstrapClassify(negative, d$labels, nBoot = 2,
+        correctedCounts = TRUE), "non-negative")
+    expect_error(bootstrapClassify(d$counts, d$labels, nBoot = 2,
+        correctedCounts = NA), "TRUE or FALSE")
     # whole numbers give the same result either way
-    f1 = suppressMessages(bootstrapClassify(d$counts, d$labels, nBoot = 5, seed = 1))
-    f2 = suppressMessages(bootstrapClassify(d$counts, d$labels, nBoot = 5, seed = 1, correctedCounts = TRUE))
+    set.seed(1)
+    f1 <- suppressMessages(bootstrapClassify(d$counts, d$labels, nBoot = 5))
+    set.seed(1)
+    f2 <- suppressMessages(bootstrapClassify(d$counts, d$labels, nBoot = 5,
+        correctedCounts = TRUE))
     expect_equal(f2, f1)
 })
 
 test_that("resampling in blocks of cells gives the same counts", {
-    d = makeCounts()
+    d <- makeCounts()
     set.seed(1)
-    whole = resampleCounts(resampleLayout(d$counts))
+    whole <- resampleCounts(resampleLayout(d$counts))
     set.seed(1)
-    blocked = resampleCounts(resampleLayout(d$counts, blockSize = 30))
+    blocked <- resampleCounts(resampleLayout(d$counts, blockSize = 30))
     expect_gt(length(resampleLayout(d$counts, blockSize = 30)$blocks), 1)
     expect_identical(blocked, whole)
 })
 
 test_that("crossfit folds keep every class in every training split", {
-    d = makeCounts()
-    lab = d$labels
-    lab[lab == "B"][-(1:2)] = "A" # B has only 2 cells
+    d <- makeCounts()
+    lab <- d$labels
+    lab[lab == "B"][-(1:2)] <- "A" # B has only 2 cells
     for (seed in 1:5) {
-        p = crossfitClassify(d$counts, lab, nFolds = 2, seed = seed)
+        set.seed(seed)
+        p <- crossfitClassify(d$counts, lab, nFolds = 2)
         expect_equal(unname(rowSums(p)), rep(1, nrow(p)))
         expect_true(all(p[, "B"] > 0))
     }
 })
 
 test_that("crossfitClassify rejects singleton classes and impossible fold counts", {
-    d = makeCounts()
-    lab = d$labels
-    lab[lab == "B"][-1] = "A"
+    d <- makeCounts()
+    lab <- d$labels
+    lab[lab == "B"][-1] <- "A"
     expect_error(crossfitClassify(d$counts, lab, nFolds = 3), "'B' has 1")
     for (k in list(1, 2.5, NA, c(2, 3), nrow(d$counts) + 1)) {
-        expect_error(crossfitClassify(d$counts, d$labels, nFolds = k), "`nFolds` must be")
+        expect_error(crossfitClassify(d$counts, d$labels, nFolds = k),
+            "`nFolds` must be")
     }
 })
 
 test_that("the classifiers run BLAS on one thread and restore the session's setting", {
-    before = RhpcBLASctl::blas_get_num_procs()
+    before <- RhpcBLASctl::blas_get_num_procs()
     on.exit(RhpcBLASctl::blas_set_num_threads(before))
     RhpcBLASctl::blas_set_num_threads(2L)
-    skip_if(RhpcBLASctl::blas_get_num_procs() != 2L, "this BLAS does not have a thread count to set")
-    d = makeCounts()
-    seen = NULL
-    resample = resampleHits
+    skip_if(RhpcBLASctl::blas_get_num_procs() != 2L,
+        "this BLAS does not have a thread count to set")
+    d <- makeCounts()
+    seen <- NULL
+    resample <- resampleHits
     local_mocked_bindings(resampleHits = function(...) {
         seen <<- c(seen, RhpcBLASctl::blas_get_num_procs())
         resample(...)
     })
-    suppressMessages(bootstrapClassify(d$counts, d$labels, nBoot = 2, seed = 1))
+    suppressMessages(bootstrapClassify(d$counts, d$labels, nBoot = 2))
     expect_true(length(seen) > 0 && all(seen == 1L))
     expect_equal(RhpcBLASctl::blas_get_num_procs(), 2L)
 })
 
 test_that("logistic fits predict resamples from their nonzero entries as from the whole matrix", {
-    d = makeCounts()
-    counts = d$counts
-    counts[3, ] = 0 # a cell with no counts
-    scaled = scaleCountMat(counts)
-    keep = stats::setNames(varyingColumns(scaled), colnames(counts))
-    layout = resampleLayout(counts)
+    d <- makeCounts()
+    counts <- d$counts
+    counts[3, ] <- 0 # a cell with no counts
+    scaled <- scaleCountMat(counts)
+    keep <- stats::setNames(varyingColumns(scaled), colnames(counts))
+    layout <- resampleLayout(counts)
     set.seed(1)
-    hits = resampleHits(layout)
-    boot = matrix(0L, nrow(counts), ncol(counts), dimnames = dimnames(counts))
-    boot[layout$nz] = hits
+    hits <- resampleHits(layout)
+    boot <- matrix(0L, nrow(counts), ncol(counts), dimnames = dimnames(counts))
+    boot[layout$nz] <- hits
     for (classifier in c("pcaLogistic", "logistic")) {
-        fit = suppressWarnings(trainClassifier(scaled[, keep], d$labels, classifier))
+        fit <- suppressWarnings(trainClassifier(scaled[, keep], d$labels,
+            classifier))
         expect_equal(resampleEta(layout, hits, linearMap(fit, keep)),
-            logisticEta(fit, scaleCountMat(boot)[, keep, drop = FALSE]), tolerance = 1e-10, ignore_attr = TRUE)
+            logisticEta(fit, scaleCountMat(boot)[, keep,
+                drop = FALSE]), tolerance = 1e-10, ignore_attr = TRUE)
     }
+})
+
+test_that("svm with observed priors is refused before any training", {
+    d <- makeCounts()
+    msgs <- testthat::capture_messages(expect_error(
+        bootstrapClassify(d$counts, d$labels, nBoot = 2, classifier = "svm",
+            priors = "observed"),
+        "needs class probabilities"))
+    expect_length(msgs, 0)
+})
+
+test_that("crossfitLineageProbabilities skips and checks like the bootstrap", {
+    d <- miniPipelineData()
+    ghost <- c(d$tree, list(Ghost = list(children = c("X", "Y"))))
+    expect_message(p <- crossfitLineageProbabilities(d$spe, ghost, nFolds = 3),
+        "Ghost - skipping: no cells in the data")
+    expect_named(p, "G")
+    expect_error(suppressMessages(crossfitLineageProbabilities(d$spe, ghost,
+        skipGroups = "G")), "None of the groups could be cross-fitted")
+    dup <- d$spe
+    dup$cellID[2] <- dup$cellID[1]
+    expect_error(crossfitLineageProbabilities(dup, d$tree),
+        "must contain unique, non-missing cell IDs")
 })

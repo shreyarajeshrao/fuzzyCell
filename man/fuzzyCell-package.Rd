@@ -4,11 +4,42 @@
 \name{fuzzyCell-package}
 \alias{fuzzyCell}
 \alias{fuzzyCell-package}
-\title{fuzzyCell: Bootstrap Classification Confidence for Spatial Cell-Type Analysis}
+\title{fuzzyCell: bootstrap classification confidence for spatial cell types}
 \description{
-\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+Cell type labels in spatial single-cell data are uncertain, particularly
+between closely related subtypes. fuzzyCell takes cells that are already
+labelled and estimates, for each cell, how confident that label is. The
+confidences are then used as soft cell type weights in downstream analyses,
+each compared with the same analysis using the original labels.
+}
+\details{
+A typical analysis has four steps:
+\enumerate{
+\item \strong{Write a cell type tree} for your data: a nested list saying which
+subtypes are closely related and may be confused with each other (see
+\link{cellTypeTree}). fuzzyCell does not provide trees; \link{lungCellTypeTree}
+is
+an example for the bundled \link{lungSubset} data. 2. \strong{Estimate
+confidences} for every group of related subtypes with
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}} (or, as
+an alternative,
+\code{\link[=crossfitLineageProbabilities]{crossfitLineageProbabilities()}}). 3.
+\strong{Run the analyses}, weighted and unweighted, against a two-level
+outcome: cell type proportions
+(\code{\link[=runProportionsPipeline]{runProportionsPipeline()}},
+\code{\link[=runProportionsRelativeToParentPipeline]{runProportionsRelativeToParentPipeline()}}),
+co-localisation
+(\code{\link[=runColocalisationModels]{runColocalisationModels()}}) and niches
+(\code{\link[=runNicheIdentification]{runNicheIdentification()}},
+\code{\link[=testNicheOutcome]{testNicheOutcome()}}).
+\code{\link[=confidenceWeights]{confidenceWeights()}} gives the weights for use
+in other tools, such as spicyR and lisaClust. 4. \strong{Plot} the confidences
+and results, for example with
+\code{\link[=plotWeightedSpatial]{plotWeightedSpatial()}} and
+\code{\link[=plotProportionBoxplot]{plotProportionBoxplot()}}.
+}
 
-Cell type labels in spatial single-cell data are uncertain, particularly between closely related subtypes. fuzzyCell estimates a per-cell classification confidence by bootstrapping (multinomial resampling of each cell's counts followed by re-classification) and uses the resulting confidences as soft cell type weights. The weights are propagated through downstream analyses: cell type proportions, co-localisation (spicyR's L-function, and Statial's Kontextual test for relative co-localisation) and niche identification (lisaClust), each compared to the same analysis using hard labels. Cell types are organised with a user-supplied hierarchy of lineages, groups and subtypes. Helpers for testing against sample-level outcomes and for plotting are included.
+See \code{vignette("fuzzyCell")} for a full walkthrough.
 }
 \seealso{
 Useful links:
@@ -29,4 +60,3 @@ Authors:
 }
 
 }
-\keyword{internal}

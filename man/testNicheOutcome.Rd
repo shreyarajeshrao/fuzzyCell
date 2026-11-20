@@ -16,33 +16,33 @@ testNicheOutcome(
 )
 }
 \arguments{
-\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with a cell
-ID, an image and the outcome for every cell in \code{colData}.}
+\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with
+a cell ID, an image and the outcome for every cell in \code{colData}.}
 
 \item{nicheUnweighted, nicheWeighted}{Named cell-to-niche vectors, as
 returned by \code{\link[=runNicheIdentification]{runNicheIdentification()}}.}
 
-\item{outcomeCol}{Name of the per-image outcome column in \code{colData(spe)}. It
-must have exactly two levels (subset your data to two conditions first) and
-a single value per image: repeated measures and mixed models are not
-supported. An error is raised otherwise, before any computation.}
+\item{outcomeCol}{Name of the per-image outcome column in \code{colData(spe)}.
+It must have exactly two levels (subset your data to two conditions first)
+and a single value per image. An error is raised otherwise, before any
+computation.}
 
 \item{test}{\code{"wilcox"} or \code{"ttest"}.}
 
-\item{subject}{Name of the \code{colData(spe)} column identifying the subject (for
-example the patient) each image comes from, or \code{NULL}. If given, every
-image must belong to one subject and every subject must contribute only
-one image, as in \code{\link[=runColocalisationModels]{runColocalisationModels()}}. With \code{NULL} this cannot be checked,
-and a message says so.}
+\item{subject}{Name of the \code{colData(spe)} column identifying the subject
+(for example the patient) each image comes from, or \code{NULL}. If given,
+every image must belong to one subject; subjects with several images are
+handled as described in Details. With \code{NULL} every image is treated as a
+separate subject, and a message says so.}
 
-\item{cellID, imageID}{Names of the \code{colData(spe)} columns holding a unique
-cell ID (matching the names of the niche vectors) and the image each cell
-is in.}
+\item{cellID, imageID}{Names of the \code{colData(spe)} columns holding a
+unique cell ID (matching the names of the niche vectors) and the image
+each cell is in.}
 }
 \value{
-A list with \code{testUnweighted}, \code{testWeighted} (one row per niche)
-and \code{propUnweighted}, \code{propWeighted} (per image niche proportions, to
-pass to \code{\link[=nicheProportionBoxplot]{nicheProportionBoxplot()}}).
+A list with \code{testUnweighted}, \code{testWeighted} (one row per niche) and
+\code{propUnweighted}, \code{propWeighted} (per image niche proportions, to pass
+to \code{\link[=nicheProportionBoxplot]{nicheProportionBoxplot()}}).
 }
 \description{
 Computes the proportion of each image's cells in each niche and tests every
@@ -51,18 +51,32 @@ niche against a two-level outcome with a Wilcoxon or t-test.
 \details{
 The \code{estimate} is the difference in the niche proportion for the second
 level of the outcome compared with the first (alphabetical order for text,
-factor order for factors), for both tests, as in \code{\link[=runColocalisationModels]{runColocalisationModels()}}. For
+factor order for factors), as in
+\code{\link[=runColocalisationModels]{runColocalisationModels()}}. For
 \code{test = "wilcox"} this is the Hodges-Lehmann estimate of the shift in
-location. Each image is one observation, so every image must come from a
-different subject if \code{subject} is given.
+location.
+
+Each image is one observation. When \code{subject} is given and some subject has
+several images, those images are not independent:
+\itemize{
+\item with \code{test = "ttest"}, each niche is tested with a linear mixed model
+with a random intercept per subject (\code{lmerTest::lmer()}, as spicyR fits for
+co-localisation), which needs the lmerTest package;
+\item with \code{test = "wilcox"}, each subject's cells are pooled into one set
+of niche proportions, and the subjects are compared (as \code{spicyR::colTest()}
+does). This needs every image of a subject to have the same outcome.
+}
+
+A message says which is used.
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
 data(lungConfList)
-niches = runNicheIdentification(lungSubset, lungCellTypeTree, lungConfList,
+set.seed(1)
+niches <- runNicheIdentification(lungSubset, lungCellTypeTree, lungConfList,
     r = 50, k = 6)
-res = testNicheOutcome(lungSubset, niches$nicheUnweighted,
+res <- testNicheOutcome(lungSubset, niches$nicheUnweighted,
     niches$nicheWeighted, outcomeCol = "disease_status", subject = "subject")
 res$testWeighted
 }

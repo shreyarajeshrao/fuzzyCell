@@ -31,8 +31,7 @@ reference:
   - title: Data
     contents:
       - getCellData
-      - loadAmancherla
       - lungSubset
       - lungCellTypeTree
       - lungConfList
-      - heartCellTypeTree
+      - lungColocalisation

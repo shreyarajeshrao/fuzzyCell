@@ -30,47 +30,68 @@ runProportionsRelativeToParentPipeline(
 )
 }
 \arguments{
-\item{spe}{A \code{SummarizedExperiment} (e.g. \code{SpatialExperiment}) with a cell
-ID, cell type and image for every cell in \code{colData}.}
+\item{spe}{A \code{SummarizedExperiment} (e.g. \code{SpatialExperiment}) with a
+cell ID, cell type and image for every cell in \code{colData}.}
 
 \item{cellTypeTree}{A cell type tree, see \link{cellTypeTree}.}
 
-\item{confList}{Confidence list from \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}: a named
-list with one data frame per group, whose names must be groups of
+\item{confList}{Confidence list from
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}: a
+named list with one data frame per group, whose names must be groups of
 \code{cellTypeTree}.}
 
-\item{outcomeCol}{Name of the per-image outcome column in \code{colData(spe)}. It
-must have exactly two levels (subset your data to two conditions first)
-and a single value per image: repeated measures and mixed models are not
-supported. An error is raised otherwise, before any computation.}
+\item{outcomeCol}{Name of the per-image outcome column in \code{colData(spe)}.
+It must have exactly two levels (subset your data to two conditions first)
+and a single value per image. An error is raised otherwise, before any
+computation.}
 
-\item{skipGroups}{Names of groups of \code{cellTypeTree} to exclude, as a character
-vector (the default \code{character(0)} excludes none). An error is raised for
-a name that is not a group of the tree, so the same \code{skipGroups} can be used
-here and in \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
+\item{skipGroups}{Names of groups of \code{cellTypeTree} to exclude, as a
+character vector (the default \code{character(0)} excludes none). An error is
+raised for a name that is not a group of the tree, so the same
+\code{skipGroups} can be used here and in
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
 
-\item{subject}{Name of the \code{colData(spe)} column identifying the subject (for
-example the patient) each image comes from, or \code{NULL}. If given, every
-image must belong to one subject and every subject must contribute only
-one image, as in \code{\link[=runColocalisationModels]{runColocalisationModels()}}. With \code{NULL} this cannot be checked,
-and a message says so.}
+\item{subject}{Name of the \code{colData(spe)} column identifying the subject
+(for example the patient) each image comes from, or \code{NULL}. If given,
+every image must belong to one subject; subjects with several images are
+handled with mixed models (see Details). With \code{NULL} every image is
+treated as a separate subject, and a message says so.}
 
-\item{cellType, cellID, imageID}{Names of the \code{colData(spe)} columns holding
-each cell's cell type label, a unique cell ID (matching the \code{cellID} column
-of \code{confList}), and the image it is in.}
+\item{cellType, cellID, imageID}{Names of the \code{colData(spe)} columns
+holding each cell's cell type label, a unique cell ID (matching the
+\code{cellID} column of \code{confList}), and the image it is in.}
 }
 \value{
-A list with \code{proportions}, \code{weighted}, \code{unweighted} (long
-\code{data.frame}s; only \code{proportions} and not \code{weighted}/\code{unweighted} for
-the relative-to-parent version), and \code{modelWeighted} and
-\code{modelUnweighted} (per cell type model results, where \code{estimate} is the
-difference for the second level of the outcome compared with the first).
+\code{runProportionsPipeline()} returns a list with:
+\itemize{
+\item \code{unweighted}: the proportion of each image's cells in each cell type
+and bootstrapped group, from the original labels (columns \code{imageID},
+\code{cellType}, \code{proportionUnweighted});
+\item \code{weighted}: the same from the bootstrap confidences (columns
+\code{imageID}, \code{group}, \code{cellType}, \code{proportionWeighted});
+\item \code{proportions}: both together (columns \code{imageID},
+\code{cellType}, \code{proportionUnweighted}, \code{group},
+\code{proportionWeighted});
+\item \code{modelUnweighted}, \code{modelWeighted}: one row per cell type, with
+the \code{estimate} (the second level of the outcome minus the first), its
+\code{statistic} (t value), \code{p.value}, the BH-adjusted \code{p.adj} and the
+\code{group}.
+}
+
+\code{runProportionsRelativeToParentPipeline()} returns \code{proportions} (each
+subtype as a proportion of its group's cells, columns \code{imageID},
+\code{group}, \code{cellType}, \code{proportionUnweighted},
+\code{proportionWeighted}; \code{NaN} for images without cells of the group),
+\code{modelUnweighted} and \code{modelWeighted}.
+
+In every table, \code{group} is the group a subtype belongs to; for a cell type
+without a group, and for a whole group, it is the cell type or group itself.
 }
 \description{
 Computes per-image proportions of every cell type using original labels
 (unweighted) and bootstrap confidences (weighted), and tests each against an
-outcome with a linear model. \code{runProportionsRelativeToParentPipeline()}
-instead expresses each subtype as a proportion of its parent group.
+outcome. \code{runProportionsRelativeToParentPipeline()} instead expresses each
+subtype as a proportion of its parent group.
 }
 \details{
 In \code{runProportionsPipeline()} the unweighted results cover every cell type
@@ -78,24 +99,27 @@ and also the whole groups that were bootstrapped. Only the subtypes of those
 groups have confidences, so for every other cell type (cell types without a
 group, and the group-level proportions) the weighted proportion is the
 unweighted one: their labels are not uncertain. The weighted and unweighted
-models therefore test the same set of cell types, and their adjusted
-p-values are comparable.
+models therefore test the same set of cell types, and their adjusted p-values
+are comparable.
 
-The \code{lineage} column of the results is the group a subtype belongs to (not
-the broad lineage). For cell types without a group and for the group-level
-proportions it is the cell type or group itself.
+Each cell type's proportion is tested with a linear model on the outcome,
+with each image as one observation. When \code{subject} is given and some
+subject has several images, those images are not independent, so a linear
+mixed model with a random intercept per subject is fitted instead
+(\code{lmerTest::lmer()}, as spicyR fits for co-localisation); this needs the
+lmerTest package, and a message says so.
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
 data(lungConfList)
-res = runProportionsPipeline(lungSubset, lungCellTypeTree, lungConfList,
+res <- runProportionsPipeline(lungSubset, lungCellTypeTree, lungConfList,
     outcomeCol = "disease_status", subject = "subject")
 head(res$modelWeighted)
 data(lungSubset)
 data(lungCellTypeTree)
 data(lungConfList)
-rel = runProportionsRelativeToParentPipeline(lungSubset, lungCellTypeTree,
+rel <- runProportionsRelativeToParentPipeline(lungSubset, lungCellTypeTree,
     lungConfList, outcomeCol = "disease_status", subject = "subject")
 head(rel$modelWeighted)
 }

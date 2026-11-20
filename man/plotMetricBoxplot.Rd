@@ -14,7 +14,8 @@ plotMetricBoxplot(
 )
 }
 \arguments{
-\item{results}{Output of \code{\link[=runColocalisationModels]{runColocalisationModels()}}.}
+\item{results}{Output of
+\code{\link[=runColocalisationModels]{runColocalisationModels()}}.}
 
 \item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with
 \code{imageID} and the outcome in \code{colData}.}
@@ -40,17 +41,14 @@ confidence weights (weighted), for each level of the outcome. Each point is
 one image.
 }
 \examples{
-\donttest{
 data(lungSubset)
-data(lungCellTypeTree)
-data(lungConfList)
-res = runColocalisationModels(lungSubset, lungCellTypeTree, lungConfList,
-    outcomeCol = "disease_status", subject = "subject")
-if (requireNamespace("ggiraph", quietly = TRUE)) {
-    plotMetricBoxplot(res, lungSubset, "Mast", "Proliferating FBs",
-        outcomeCol = "disease_status")
-    plotMetricBoxplot(res, lungSubset, "Mast", "Proliferating FBs",
-        outcomeCol = "disease_status", metric = "kontextual")
-}
+data(lungColocalisation)
+if (requireNamespace("ggiraph", quietly = TRUE) &&
+    requireNamespace("gdtools", quietly = TRUE)) {
+    plotMetricBoxplot(lungColocalisation, lungSubset, "Mast",
+        "Proliferating FBs", outcomeCol = "disease_status")
+    plotMetricBoxplot(lungColocalisation, lungSubset, "Mast",
+        "Proliferating FBs", outcomeCol = "disease_status",
+        metric = "kontextual")
 }
 }

@@ -23,10 +23,10 @@ plotWeightedSpatialPair(
 
 plotHardSpatialPair(
   spe,
+  cellTypeTree,
   imageID,
   subtypeA,
   subtypeB,
-  cellTypeTree = NULL,
   cellSize = 1
 )
 
@@ -43,29 +43,31 @@ plotWeightedSpatial(
 plotOriginalLabelSpatial(spe, cellTypeTree, imageID, targetGroup, cellSize = 1)
 }
 \arguments{
-\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with a cell
-ID, cell type, image and coordinates for every cell in the form given by
-\code{\link[=getCellData]{getCellData()}} (\code{cellID}, \code{cellType}, \code{imageID}, \code{x} and \code{y}).}
+\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with
+a cell ID, cell type, image and coordinates for every cell in the form
+given by \code{\link[=getCellData]{getCellData()}} (\code{cellID},
+\code{cellType}, \code{imageID}, \code{x} and \code{y}).}
 
-\item{cellTypeTree}{A cell type tree, see \link{cellTypeTree}. Optional for
-\code{plotHardSpatialPair()}, where it is only needed to use a group name as a
-label.}
+\item{cellTypeTree}{A cell type tree, see \link{cellTypeTree}. For
+\code{plotHardSpatialPair()} it can be \code{NULL}: the tree is only needed to
+use a group name as a label.}
 
-\item{confList}{Confidence list from \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
+\item{confList}{Confidence list from
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
 
-\item{imageID}{The image to plot. An error is raised if it is not an image in
-the data.}
+\item{imageID}{The image to plot. An error is raised if it is not an image
+in the data.}
 
 \item{groupA, groupB, targetGroup}{Group names. An error is raised for a group
 that has no cells in the data.}
 
 \item{subtypeA, subtypeB, targetSubtype}{Cell types within the groups, which
-must have confidence scores in \code{confList} (for \code{plotHardSpatialPair()}, a
-cell type or a group name in the data).}
+must have confidence scores in \code{confList} (for
+\code{plotHardSpatialPair()}, a cell type or a group name in the data).}
 
-\item{encoding}{How to show the confidence scores: \code{"alpha"} (the default),
-as transparency, or \code{"colour"}, as a colour gradient. Either way each of the
-two cell types has its own legend.}
+\item{encoding}{How to show the confidence scores: \code{"alpha"} (the
+default), as transparency, or \code{"colour"}, as a colour gradient. Either way
+each of the two cell types has its own legend.}
 
 \item{cellSize}{Size of the highlighted cells, the ones drawn in colour. The
 grey background cells always have size 0.7.}
@@ -75,21 +77,33 @@ A \code{ggplot} object.
 }
 \description{
 Plots the cells of one image, highlighting a cell type or group, or showing
-bootstrap confidence scores.
+bootstrap confidence scores. Each plot shows the cell positions (\code{x},
+\code{y}) with the other cells of the image in grey.
+}
+\details{
+\itemize{
+\item \code{plotWeightedSpatialPair()} shows two cell types from two different
+groups, with every cell of the two groups shaded by its confidence of being
+that cell type.
+\item \code{plotHardSpatialPair()} shows two cell types (or groups) with their
+original labels.
+\item \code{plotWeightedSpatial()} shows the cells of one group, shaded by their
+confidence of being one of its cell types.
+\item \code{plotOriginalLabelSpatial()} shows the cells of one group, coloured
+by their original cell type labels.
+}
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
 data(lungConfList)
-plotHardSpatialPair(lungSubset, "VUHD113", "Mast", "Proliferating FBs",
-    lungCellTypeTree)
+plotHardSpatialPair(lungSubset, lungCellTypeTree, "VUHD113", "Mast",
+    "Proliferating FBs")
 plotWeightedSpatial(lungSubset, lungCellTypeTree, lungConfList, "VUHD113",
     "Endothelial lineage", "Arteriole")
 plotOriginalLabelSpatial(lungSubset, lungCellTypeTree, "VUHD113",
     "Endothelial lineage")
-if (requireNamespace("ggnewscale", quietly = TRUE)) {
-    plotWeightedSpatialPair(lungSubset, lungCellTypeTree, lungConfList,
-        "VUHD113", "Granulocytes", "Mast", "Fibroblast lineage",
-        "Proliferating FBs")
-}
+plotWeightedSpatialPair(lungSubset, lungCellTypeTree, lungConfList,
+    "VUHD113", "Granulocytes", "Mast", "Fibroblast lineage",
+    "Proliferating FBs")
 }

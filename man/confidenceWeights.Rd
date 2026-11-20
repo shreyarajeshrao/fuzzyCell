@@ -20,7 +20,8 @@ cell ID, cell type, image and coordinates for every cell (see
 
 \item{cellTypeTree}{A cell type tree, see \link{cellTypeTree}.}
 
-\item{confList}{Confidence list from \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
+\item{confList}{Confidence list from
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}.}
 
 \item{weighted}{\code{TRUE} for the bootstrap confidences, \code{FALSE} for the
 original labels (0/1 weights) on the same columns.}
@@ -30,21 +31,21 @@ cell's cell type label and a unique cell ID (matching the \code{cellID} column
 of \code{confList}).}
 }
 \value{
-A numeric matrix with one row per cell of \code{spe} (in its order) and one
-named column per leaf cell type and group.
+A numeric matrix with one row per cell of \code{spe} (in its order) and
+one named column per leaf cell type and group.
 }
 \description{
 Builds the soft cell type membership of every cell, the weights that the
 weighted analyses pass to spicyR and lisaClust: one column per leaf cell type
 and per group of the tree. A cell of a bootstrapped group has, for each
 subtype of the group, its bootstrap confidence in that subtype; every other
-cell has weight 1 for its own cell type. A group's column is 1 for each of its
-cells, since the bootstrap reclassifies cells only within their group.
+cell has weight 1 for its own cell type. A group's column is 1 for each of
+its cells, since the bootstrap reclassifies cells only within their group.
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
 data(lungConfList)
-w = confidenceWeights(lungSubset, lungCellTypeTree, lungConfList)
+w <- confidenceWeights(lungSubset, lungCellTypeTree, lungConfList)
 head(w[, c("Arteriole", "Venous", "Endothelial lineage")])
 }

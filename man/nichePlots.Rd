@@ -24,20 +24,21 @@ nicheBarplot(spe, niche, target, cellType = "cellType", limit = c(0.33, 3))
 nicheProportionBoxplot(proportions, niche, spe, outcomeCol)
 }
 \arguments{
-\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with the
-cell type, image and coordinates of every cell in the form given by
+\item{spe}{A \code{SummarizedExperiment} (e.g. a \code{SpatialExperiment}) with
+the cell type, image and coordinates of every cell in the form given by
 \code{\link[=getCellData]{getCellData()}}.}
 
 \item{imageID}{The image to plot.}
 
-\item{niche}{For \code{plotNicheSpatial()} and the proportion boxplot, the niche
-to show. For \code{nicheCompositionMap()} and \code{nicheBarplot()}, the niche
-assignments: either a vector of niches named by cell ID, such as
-\code{niches$nicheWeighted} from \code{\link[=runNicheIdentification]{runNicheIdentification()}}, or the name of a
-\code{colData} column holding them.}
+\item{niche}{For \code{plotNicheSpatial()} and the proportion boxplot, the
+niche to show. For \code{nicheCompositionMap()} and \code{nicheBarplot()}, the
+niche assignments: either a vector of niches named by cell ID, such as
+\code{niches$nicheWeighted} from
+\code{\link[=runNicheIdentification]{runNicheIdentification()}}, or the name of
+a \code{colData} column holding them.}
 
-\item{nicheCol}{The niche assignments for \code{plotNicheSpatial()}, in either of
-the forms taken by \code{niche} in \code{nicheCompositionMap()}.}
+\item{nicheCol}{The niche assignments for \code{plotNicheSpatial()}, in either
+of the forms taken by \code{niche} in \code{nicheCompositionMap()}.}
 
 \item{cellSize}{Size of the highlighted cells in \code{plotNicheSpatial()}, the
 cells of the chosen niche. The grey background cells always have size 0.7.}
@@ -48,13 +49,15 @@ cells of the chosen niche. The grey background cells always have size 0.7.}
 
 \item{limit}{Lower and upper limit of the relative enrichment.}
 
-\item{...}{Further arguments passed to \code{\link[pheatmap:pheatmap]{pheatmap::pheatmap()}}.}
+\item{...}{Further arguments passed to
+\code{\link[pheatmap:pheatmap]{pheatmap::pheatmap()}}.}
 
 \item{target}{The niche to plot in \code{nicheBarplot()}.}
 
-\item{proportions}{The \code{propWeighted} or \code{propUnweighted} element of the
-results of \code{\link[=testNicheOutcome]{testNicheOutcome()}}: the table you pass decides whether the
-weighted or the unweighted niches are plotted.}
+\item{proportions}{The \code{propWeighted} or \code{propUnweighted} element of
+the results of \code{\link[=testNicheOutcome]{testNicheOutcome()}}: the table
+you pass decides whether the weighted or the unweighted niches are
+plotted.}
 
 \item{outcomeCol}{Name of the per-image outcome column in \code{colData(spe)}.}
 }
@@ -66,23 +69,25 @@ result of \code{\link[pheatmap:pheatmap]{pheatmap::pheatmap()}}.
 \description{
 \code{plotNicheSpatial()} shows the cells of one niche in one image.
 \code{nicheCompositionMap()} shows the relative enrichment of each cell type in
-each niche as a bubble plot or heatmap. \code{nicheBarplot()} shows it for a single
-niche. \code{nicheProportionBoxplot()} compares a niche's per-image proportion
-between outcome groups.
+each niche as a bubble plot or heatmap. \code{nicheBarplot()} shows it for a
+single niche. \code{nicheProportionBoxplot()} compares a niche's per-image
+proportion between outcome groups.
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
 data(lungConfList)
-niches = runNicheIdentification(lungSubset, lungCellTypeTree, lungConfList,
+set.seed(1)
+niches <- runNicheIdentification(lungSubset, lungCellTypeTree, lungConfList,
     r = 50, k = 6)
 plotNicheSpatial(lungSubset, "VUHD113", "niche1",
     nicheCol = niches$nicheWeighted)
 nicheCompositionMap(lungSubset, niches$nicheWeighted)
 nicheBarplot(lungSubset, niches$nicheWeighted, "niche1")
-res = testNicheOutcome(lungSubset, niches$nicheUnweighted,
+res <- testNicheOutcome(lungSubset, niches$nicheUnweighted,
     niches$nicheWeighted, outcomeCol = "disease_status", subject = "subject")
-if (requireNamespace("ggiraph", quietly = TRUE)) {
+if (requireNamespace("ggiraph", quietly = TRUE) &&
+    requireNamespace("gdtools", quietly = TRUE)) {
     nicheProportionBoxplot(res$propWeighted, "niche1", lungSubset,
         "disease_status")
     nicheProportionBoxplot(res$propUnweighted, "niche1", lungSubset,

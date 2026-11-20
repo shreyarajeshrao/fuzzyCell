@@ -10,7 +10,6 @@ bootstrapClassify(
   nBoot = 100,
   nPerClass = 50,
   cores = 1,
-  seed = NULL,
   classifier = c("pcaLogistic", "logistic", "rf", "lda", "svm"),
   ntree = 500,
   priors = c("balanced", "observed"),
@@ -22,60 +21,64 @@ bootstrapClassify(
 for the cells of one group. Normalised or log-transformed values are
 rejected, since the resampling needs each cell's total transcript count.}
 
-\item{labels}{Character vector of the original cell type label for each
-row of \code{countMat}.}
+\item{labels}{Character vector of the original cell type label for each row
+of \code{countMat}.}
 
 \item{nBoot}{Number of bootstrap resamples.}
 
-\item{nPerClass}{Minimum number of training cells per class; classes
-smaller than this are up-sampled with replacement.}
+\item{nPerClass}{Minimum number of training cells per class; classes smaller
+than this are up-sampled with replacement.}
 
-\item{cores}{Number of cores to run the bootstrap resamples on (forked
-with BiocParallel); the default runs serially. On Windows, where forking is
-not available, it always runs serially. If \code{seed} is given, the results are
-identical whatever the number of cores.}
+\item{cores}{Number of cores to run the bootstrap resamples on (forked with
+BiocParallel); the default runs serially. On Windows, where forking is not
+available, it always runs serially. After \code{\link[=set.seed]{set.seed()}},
+the results are identical whatever the number of cores.}
 
-\item{seed}{Random seed for reproducibility, or \code{NULL}. Recommended for reproducibility.}
-
-\item{classifier}{One of \code{"pcaLogistic"} (ridge multinomial logistic
-regression, via glmnet, with the penalty chosen by cross-validation, on the
-first 50 principal components of the training cells, computed exactly
-for up to 5,000 genes and with irlba beyond; the
-default), \code{"logistic"} (the same on all genes), \code{"rf"} (random forest, via randomForest), \code{"lda"} (linear
-discriminant analysis, via MASS) or \code{"svm"} (support vector machine, via
-e1071).}
+\item{classifier}{One of: * \code{"pcaLogistic"} (the default): ridge
+multinomial logistic regression, via glmnet, with the penalty chosen by
+cross-validation, on the first 50 principal components of the training
+cells (computed exactly for up to 5,000 genes, and with irlba beyond); *
+\code{"logistic"}: the same on all genes; * \code{"rf"}: random forest, via
+randomForest; * \code{"lda"}: linear discriminant analysis, via MASS; *
+\code{"svm"}: support vector machine, via e1071.}
 
 \item{ntree}{Number of trees; only used when \code{classifier = "rf"}.}
 
 \item{priors}{The classifier is trained with balanced classes, which gives
 every class the same prior. \code{"balanced"} keeps those equal priors;
 \code{"observed"} weights each class by its share of the cells, so a resample
-is assigned to its most probable class given how common the classes are.}
+is assigned to its most probable class given how common the classes are.
+\code{"observed"} needs class probabilities, so it is not available for
+\code{classifier = "svm"}.}
 
 \item{correctedCounts}{\code{FALSE} (the default) requires whole-number counts.
 \code{TRUE} also accepts counts that are not whole numbers, such as counts
 corrected for ambient RNA, and resamples them as they are. They must still
 be on the scale of molecule counts: a cell's resample draws as many
-transcripts as its total (rounded), so normalised or log-transformed values
-would give the wrong amount of resampling noise.}
+transcripts as its total (rounded), so normalised or log-transformed
+values would give the wrong amount of resampling noise.}
 }
 \value{
-A numeric matrix with one row per cell (in the order of
-\code{countMat}) and one column per class in \code{labels}. Entry \verb{[i, k]} is the
-fraction of bootstrap resamples in which cell \code{i} was classified as class
-\code{k}, so each row sums to 1.
+A numeric matrix with one row per cell (in the order of \code{countMat})
+and one column per class in \code{labels}. Entry \verb{[i, k]} is the fraction
+of bootstrap resamples in which cell \code{i} was classified as class \code{k},
+so each row sums to 1.
 }
 \description{
-The single-group worker behind bootstrapLineageConfidence().
-Trains a classifier on one group's cells, then repeatedly
-resamples each cell's counts (multinomial resampling) and
-re-predicts its class. The fraction of resamples assigning a cell to each
-class is its confidence for that class.
+Trains a classifier on one group's cells, then repeatedly resamples each
+cell's counts (multinomial resampling) and classifies the resample. The
+fraction of resamples assigning a cell to each class is its confidence for
+that class.
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}} runs
+this on every group of a cell type tree.
 }
 \examples{
 data(lungSubset)
-endo = lungSubset$cellType \%in\% c("Arteriole", "Venous", "Capillary", "Lymphatic")
-countMat = t(as.matrix(SummarizedExperiment::assay(lungSubset, "counts")[, endo]))
-freq = bootstrapClassify(countMat, lungSubset$cellType[endo], nBoot = 5, seed = 1)
+set.seed(1)
+endo <- lungSubset$cellType \%in\%
+    c("Arteriole", "Venous", "Capillary", "Lymphatic")
+countMat <- t(as.matrix(
+    SummarizedExperiment::assay(lungSubset, "counts")[, endo]))
+freq <- bootstrapClassify(countMat, lungSubset$cellType[endo], nBoot = 5)
 head(freq)
 }

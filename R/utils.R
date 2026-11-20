@@ -1,16 +1,13 @@
-# Internal helpers shared across the package (not exported).
+# Helpers shared by several files of the package. Helpers used by one file
+# only are kept in that file.
 
-# Per-cell data.frame (one row per cell) from a SummarizedExperiment /
-# SpatialExperiment.
-# Pulls colData; for a SpatialExperiment whose coordinates live in
-# spatialCoords() rather
-# than colData, adds them as columns `x` and `y`.
 #' Per-cell data frame from a SummarizedExperiment
 #'
-#' Returns `colData(spe)` as a `data.frame`. For a `SpatialExperiment` whose
-#' coordinates are stored in `spatialCoords()` rather than in `colData()`,
-#' the coordinates are added as columns `x` and `y`. The spatial functions in
-#' fuzzyCell expect `cellID`, `imageID`, `cellType`, `x` and `y` columns.
+#' Returns `colData(spe)` as a `data.frame`. For a
+#' `SpatialExperiment` whose coordinates are stored in `spatialCoords()`
+#' rather than in `colData()`, the coordinates are added as columns `x`
+#' and `y`. The spatial functions in fuzzyCell expect `cellID`,
+#' `imageID`, `cellType`, `x` and `y` columns.
 #'
 #' @param spe A `SummarizedExperiment` or `SpatialExperiment`.
 #'
@@ -20,219 +17,15 @@
 #' data(lungSubset)
 #' head(getCellData(lungSubset))
 #' @export
-getCellData = function(spe) {
-    cells = as.data.frame(SummarizedExperiment::colData(spe))
-    if (methods::is(spe, "SpatialExperiment") && !all(c("x", "y") %in% names(cells))) {
-        xy = SpatialExperiment::spatialCoords(spe)
-        cells$x = xy[, 1]
-        cells$y = xy[, 2]
+getCellData <- function(spe) {
+    cells <- as.data.frame(SummarizedExperiment::colData(spe))
+    if (methods::is(spe, "SpatialExperiment") &&
+        !all(c("x", "y") %in% names(cells))) {
+        xy <- SpatialExperiment::spatialCoords(spe)
+        cells$x <- xy[, 1]
+        cells$y <- xy[, 2]
     }
     cells
-}
-
-# generate all possible pairwise comparisons, one row per pair
-generateComparisons = function(cellTypeTree, confList) {
-    groups = names(confList)
-    cellMap = buildCellTypeMap(cellTypeTree)$cellMap
-
-    # ungrouped leaf nodes - their cell type label is the group
-    cellMap$group[is.na(cellMap$group)] = cellMap$cellType[is.na(cellMap$group)]
-    leaves = cellMap$cellType
-
-    # group x group - every ordered pair, both directions
-    groupGroup = expand.grid(from = groups, to = groups, stringsAsFactors = FALSE)
-
-    # group x leaf - every ordered pair, both directions
-    groupLeafBase = expand.grid(group = groups, leaf = leaves, stringsAsFactors = FALSE) |>
-        dplyr::mutate(leafGroup = cellMap$group[match(leaf, cellMap$cellType)])
-
-    groupLeaf = dplyr::bind_rows(
-        dplyr::mutate(groupLeafBase, from = group, to = leaf),
-        dplyr::mutate(groupLeafBase, from = leaf, to = group)
-    )
-
-    # leaf x leaf - every ordered pair, both directions
-    leafLeaf = expand.grid(from = leaves, to = leaves, stringsAsFactors = FALSE)
-
-    list(groupGroup = groupGroup, groupLeaf = groupLeaf, leafLeaf = leafLeaf)
-}
-
-# log1p-normalizes and z-scores every row (cell) of a cells x genes count matrix
-# in one
-# vectorized pass. Cells with zero total count come out all-zero.
-# TRUE for the columns of a matrix whose values are not all the same (variance above 0)
-varyingColumns = function(mat) {
-    if (nrow(mat) < 2) return(rep(FALSE, ncol(mat)))
-    colSums(mat != rep(mat[1, ], each = nrow(mat))) > 0
-}
-
-scaleCountMat = function(mat) {
-    totals = rowSums(mat)
-    norm = log1p(mat / pmax(totals, 1) * 1e4)
-    norm[totals == 0, ] = 0
-
-    means = rowMeans(norm)
-    centred = norm - means
-    sds = sqrt(rowSums(centred^2) / (ncol(mat) - 1))
-    sds[sds == 0] = 1 # avoid div-by-zero for zero-variance rows
-    centred / sds
-}
-
-# names of the per-cell columns of a SummarizedExperiment (its colData) or of a
-# data.frame / DataFrame
-cellDataNames = function(x) {
-    if (methods::is(x, "SummarizedExperiment")) {
-        names(SummarizedExperiment::colData(x))
-    } else {
-        names(x)
-    }
-}
-
-# Draws the rest of the calling function's random numbers from `seed` (unless it
-# is NULL), and restores the session's random state when that function returns,
-# so that a seed given to a fuzzyCell function leaves the user's own random
-# numbers unchanged. The draws are the same as after set.seed(seed).
-localSeed = function(seed, envir = parent.frame()) {
-    if (is.null(seed)) return(invisible())
-    hadSeed = exists(".Random.seed", globalenv(), inherits = FALSE)
-    old = if (hadSeed) get(".Random.seed", globalenv())
-    withr::defer(
-        if (hadSeed) assign(".Random.seed", old, globalenv()) else rm(".Random.seed", envir = globalenv()),
-        envir = envir)
-    assign(".Random.seed", withr::with_seed(seed, get(".Random.seed", globalenv())), globalenv())
-    invisible()
-}
-
-# checks that `value`, the argument called `arg`, is a single string naming a
-# column of x (colData of a SummarizedExperiment, or a data.frame)
-checkColumn = function(x, value, arg) {
-    where = if (methods::is(x, "SummarizedExperiment")) "colData(spe)" else "the data"
-    if (!is.character(value) || length(value) != 1 || is.na(value)) {
-        stop("`", arg, "` must be a single string naming a column of ", where,
-            call. = FALSE)
-    }
-    available = cellDataNames(x)
-    if (!value %in% available) {
-        stop("`", arg, " = \"", value, "\"` is not a column of ", where,
-            ". Available columns: ", paste(utils::head(available, 10), collapse = ", "),
-            if (length(available) > 10) ", ...", call. = FALSE)
-    }
-    invisible(value)
-}
-
-# checks that `value`, the argument called `arg`, is a single string naming an
-# assay of the SummarizedExperiment `spe`
-checkAssay = function(spe, value, arg = "assayName") {
-    if (!is.character(value) || length(value) != 1 || is.na(value)) {
-        stop("`", arg, "` must be a single string naming an assay of spe",
-            call. = FALSE)
-    }
-    available = SummarizedExperiment::assayNames(spe)
-    if (!value %in% available) {
-        stop("`", arg, " = \"", value, "\"` is not an assay of spe. ",
-            "Available assays: ", paste(available, collapse = ", "), call. = FALSE)
-    }
-    invisible(value)
-}
-
-# checks the per-image outcome used by the co-localisation models: the column
-# exists, has a single value per image, and has exactly two levels. If `subject`
-# is given, also checks that every image comes from a different subject.
-checkOutcome = function(cells, outcomeCol, subject = NULL, oneImagePerSubject = TRUE) {
-    checkColumn(cells, outcomeCol, "outcomeCol")
-    checkColumn(cells, "imageID", "imageID")
-    if (!is.null(subject)) checkSubjects(cells, subject, oneImagePerSubject)
-    outcome = cells[[outcomeCol]]
-
-    # one value per image: each image is one independent observation, so
-    # repeated measures / mixed models are not supported
-    perImage = split(outcome, cells$imageID)
-    valuesPerImage = lapply(perImage, function(v) unique(v[!is.na(v)]))
-    mixed = names(valuesPerImage)[lengths(valuesPerImage) > 1]
-    if (length(mixed) > 0) {
-        shown = utils::head(mixed, 5)
-        examples = vapply(shown, function(id) {
-            sprintf("%s (%s)", id, paste(valuesPerImage[[id]], collapse = ", "))
-        }, character(1))
-        stop("`outcomeCol = \"", outcomeCol, "\"` must have a single value per ",
-            "image, but ", length(mixed), " image", if (length(mixed) > 1) "s",
-            " ", if (length(mixed) > 1) "have" else "has", " more than one: ",
-            paste(examples, collapse = "; "), if (length(mixed) > 5) "; ...",
-            ". The models treat each image as one independent observation, so ",
-            "repeated measures and mixed models are not supported. Please make ",
-            "sure there is exactly one outcome value per image, and one image ",
-            "per sample (for example one image per patient).", call. = FALSE)
-    }
-
-    # exactly two conditions
-    levels = sort(unique(outcome[!is.na(outcome)]))
-    shownLevels = paste(utils::head(levels, 6), collapse = ", ")
-    if (length(levels) > 2) {
-        stop("`outcomeCol = \"", outcomeCol, "\"` has ", length(levels),
-            " levels (", shownLevels, if (length(levels) > 6) ", ...", "). The ",
-            "models currently compare two conditions only. Please subset the ",
-            "data to two conditions before running.", call. = FALSE)
-    }
-    if (length(levels) < 2) {
-        stop("`outcomeCol = \"", outcomeCol, "\"` has fewer than two levels",
-            if (length(levels) == 1) paste0(" (only ", shownLevels, ")"),
-            ". Two conditions are needed to compare.", call. = FALSE)
-    }
-    invisible(levels)
-}
-
-# checks that images and subjects map one-to-one: every image belongs to a
-# single subject, and every subject contributes a single image. Several images
-# from one subject are not independent, and the models treat every image as an
-# independent observation (they are not mixed models).
-checkSubjects = function(cells, subject, oneImagePerSubject = TRUE) {
-    checkColumn(cells, subject, "subject")
-    checkColumn(cells, "imageID", "imageID")
-    ids = as.character(cells[[subject]])
-    if (anyNA(ids)) {
-        noSubject = unique(as.character(cells$imageID)[is.na(ids)])
-        stop("The `subject` column '", subject, "' has missing values (in ",
-            length(noSubject), " image", if (length(noSubject) > 1) "s", ": ",
-            paste(utils::head(noSubject, 5), collapse = ", "),
-            if (length(noSubject) > 5) ", ...",
-            "). Every cell needs a subject so that images from the same ",
-            "subject can be detected.", call. = FALSE)
-    }
-
-    map = unique(data.frame(imageID = as.character(cells$imageID), subject = ids,
-        stringsAsFactors = FALSE))
-    describe = function(by, of, label) {
-        groups = split(map[[of]], map[[by]])
-        groups = groups[lengths(groups) > 1]
-        shown = utils::head(names(groups), 5)
-        list(n = length(groups), text = paste0(vapply(shown, function(g) {
-            sprintf("%s (%s)", g, paste(utils::head(groups[[g]], 4), collapse = ", "))
-        }, character(1)), collapse = "; "), more = length(groups) > 5)
-    }
-
-    # every image must belong to one subject
-    perImage = describe("imageID", "subject")
-    if (perImage$n > 0) {
-        stop("Every image must belong to a single subject, but ", perImage$n,
-            " image", if (perImage$n > 1) "s", " ", if (perImage$n > 1) "have" else "has",
-            " more than one value in the `subject` column '", subject, "': ",
-            perImage$text, if (perImage$more) "; ...", ".", call. = FALSE)
-    }
-
-    # every subject must contribute one image (unless images of a subject are
-    # combined, as in the spicyR tests)
-    if (!oneImagePerSubject) return(invisible(TRUE))
-    perSubject = describe("subject", "imageID")
-    if (perSubject$n > 0) {
-        stop("`subject = \"", subject, "\"` has more than one image for ",
-            perSubject$n, " subject", if (perSubject$n > 1) "s", ": ",
-            perSubject$text, if (perSubject$more) "; ...",
-            ". Images from the same subject are not independent, and the models ",
-            "treat every image as an independent observation (mixed models are ",
-            "not supported). Please keep one image per subject, for example by ",
-            "subsetting to one image per patient.", call. = FALSE)
-    }
-    invisible(TRUE)
 }
 
 # A copy of the per-cell data with the standard columns the analysis code reads
@@ -241,9 +34,10 @@ checkSubjects = function(cells, subject, oneImagePerSubject = TRUE) {
 # column names (each checked to be a single string). Checks that every column
 # exists, that the coordinates are numeric and complete, and that cell IDs are
 # unique.
-standardiseCells = function(cells, cols) {
+standardiseCells <- function(cells, cols) {
+    # a loop, so that the first missing column stops the check
     for (std in names(cols)) checkColumn(cells, cols[[std]], std)
-    for (std in names(cols)) cells[[std]] = cells[[cols[[std]]]]
+    cells[names(cols)] <- cells[unlist(cols, use.names = FALSE)]
 
     for (coord in intersect(c("x", "y"), names(cols))) {
         if (!is.numeric(cells[[coord]]) || anyNA(cells[[coord]])) {
@@ -253,138 +47,37 @@ standardiseCells = function(cells, cols) {
     }
     if ("cellID" %in% names(cols) &&
         (anyNA(cells$cellID) || anyDuplicated(cells$cellID))) {
-        stop("The `cellID` column '", cols[["cellID"]], "' must contain unique, ",
-            "non-missing cell IDs", if (anyDuplicated(cells$cellID))
-                paste0(" (e.g. '", cells$cellID[anyDuplicated(cells$cellID)],
-                    "' is repeated)"), call. = FALSE)
+        example <- if (anyDuplicated(cells$cellID)) {
+            sprintf(" (e.g. '%s' is repeated)",
+                cells$cellID[anyDuplicated(cells$cellID)])
+        }
+        stop("The `cellID` column '", cols[["cellID"]], "' must contain ",
+            "unique, non-missing cell IDs", example, call. = FALSE)
     }
     cells
 }
 
-# checks that `k`, the number of clusters, is a single whole number of at least 2
-checkNumberOfClusters = function(k, arg = "k") {
-    if (!is.numeric(k) || length(k) != 1 || is.na(k) || k != round(k) || k < 2) {
-        stop("`", arg, "` (the number of niches) must be a single whole number ",
-            "of at least 2", call. = FALSE)
-    }
-    invisible(k)
-}
-
-# checks that `r` is a non-empty vector of positive, finite radii
-checkRadii = function(r, arg = "r") {
-    if (!is.numeric(r) || length(r) == 0 || anyNA(r) || any(!is.finite(r)) || any(r <= 0)) {
-        stop("`", arg, "` must be a vector of one or more positive numbers (radii)",
-            call. = FALSE)
-    }
-    invisible(r)
-}
-
-# checks that `seed` is NULL (no fixed seed) or a single number
-checkCores = function(cores, arg = "cores") {
-    if (!is.numeric(cores) || length(cores) != 1 || is.na(cores) || cores < 1 || cores != round(cores)) {
-        stop("`", arg, "` must be a single whole number of at least 1", call. = FALSE)
-    }
-    invisible(cores)
-}
-
-checkSeed = function(seed, arg = "seed") {
-    if (!is.null(seed) && (!is.numeric(seed) || length(seed) != 1 || is.na(seed))) {
-        stop("`", arg, "` must be NULL or a single number", call. = FALSE)
-    }
-    invisible(seed)
-}
-
-# checks that every label is a cell type or a group of the tree
-checkTreeLabels = function(labels, cellTypeTree, arg = "toLabels") {
-    treeInfo = buildCellTypeMap(cellTypeTree)
-    valid = union(treeInfo$cellMap$cellType, treeInfo$groupsWithChildren)
-    if (!is.character(labels) || length(labels) == 0 || anyNA(labels)) {
-        stop("`", arg, "` must be NULL or a character vector of cell types and ",
-            "groups in cellTypeTree", call. = FALSE)
-    }
-    unknown = setdiff(labels, valid)
-    if (length(unknown) > 0) {
-        stop("`", arg, "` has ", length(unknown), " label",
-            if (length(unknown) > 1) "s", " that ", if (length(unknown) > 1) "are" else "is",
-            " not a cell type or group in cellTypeTree: ",
-            paste0("'", utils::head(unknown, 5), "'", collapse = ", "),
-            if (length(unknown) > 5) ", ...", ". Available labels: ",
-            paste(utils::head(valid, 10), collapse = ", "),
-            if (length(valid) > 10) ", ...", call. = FALSE)
-    }
-    invisible(labels)
-}
-
-# per-cell data without any group / lineage columns from an earlier annotation,
-# so that annotating it again does not report a replaced column
-withoutAnnotation = function(cells) {
+# Per-cell data without any group / lineage columns from an earlier annotation,
+# so that annotating it again does not report a replaced column.
+withoutAnnotation <- function(cells) {
     cells[, !names(cells) %in% c("group", "lineage"), drop = FALSE]
 }
 
-# one-line reminder that images from one subject cannot be detected when no
-# `subject` column was given
-messageIfNoSubject = function(subject) {
-    if (is.null(subject)) {
-        message("`subject` was not given, so it is not checked that every image ",
-            "comes from a different subject. Several images from one subject ",
-            "would be treated as independent samples.")
+# Names of the per-cell columns of a SummarizedExperiment (its colData) or of a
+# data.frame / DataFrame.
+cellDataNames <- function(x) {
+    if (methods::is(x, "SummarizedExperiment")) {
+        names(SummarizedExperiment::colData(x))
+    } else {
+        names(x)
     }
-    invisible()
 }
 
-# checks the arguments the proportion pipelines share: `spe` is a
-# SummarizedExperiment, `confList` has the structure that
-# bootstrapLineageConfidence() returns for groups of the tree, and `skipGroups`
-# names groups of the tree (the tree itself, not confList, so the same
-# skipGroups can be passed here and to bootstrapLineageConfidence()).
-checkProportionArgs = function(spe, cellTypeTree, confList, skipGroups) {
-    checkSpe(spe)
-    # also validates the tree
-    groups = buildCellTypeMap(cellTypeTree)$groupsWithChildren
-    showGroups = function() paste(utils::head(groups, 10), collapse = ", ")
+# Argument checks ----
 
-    if (!is.list(confList) || is.data.frame(confList) || length(confList) == 0 ||
-        is.null(names(confList)) || any(!nzchar(names(confList)))) {
-        stop("`confList` must be a named list with one data.frame per group, as ",
-            "returned by bootstrapLineageConfidence()", call. = FALSE)
-    }
-    for (g in names(confList)) {
-        conf = confList[[g]]
-        if (!is.data.frame(conf) || !"cellID" %in% names(conf) || ncol(conf) < 2) {
-            stop("`confList[[\"", g, "\"]]` must be a data.frame with a `cellID` ",
-                "column and one column of confidence scores per subtype, as ",
-                "returned by bootstrapLineageConfidence()", call. = FALSE)
-        }
-    }
-    notGroups = setdiff(names(confList), groups)
-    if (length(notGroups) > 0) {
-        stop("`confList` has ", length(notGroups), " group", if (length(notGroups) > 1) "s",
-            " that ", if (length(notGroups) > 1) "are" else "is", " not a group in ",
-            "cellTypeTree: ", paste0("'", utils::head(notGroups, 5), "'", collapse = ", "),
-            ". Groups in the tree: ", showGroups(), call. = FALSE)
-    }
-
-    if (!is.character(skipGroups) || anyNA(skipGroups)) {
-        stop("`skipGroups` must be a character vector of group names (use ",
-            "character(0) to skip none)", call. = FALSE)
-    }
-    unknownSkip = setdiff(skipGroups, groups)
-    if (length(unknownSkip) > 0) {
-        stop("`skipGroups` has ", length(unknownSkip), " name", if (length(unknownSkip) > 1) "s",
-            " that ", if (length(unknownSkip) > 1) "are" else "is", " not a group in ",
-            "cellTypeTree: ", paste0("'", utils::head(unknownSkip, 5), "'", collapse = ", "),
-            ". Groups in the tree: ", showGroups(), call. = FALSE)
-    }
-    if (length(setdiff(names(confList), skipGroups)) == 0) {
-        stop("Every group in `confList` is in `skipGroups`, so there is nothing ",
-            "left to analyse", call. = FALSE)
-    }
-    invisible(TRUE)
-}
-
-# checks that `spe` is a SummarizedExperiment (which includes SpatialExperiment
-# and SingleCellExperiment)
-checkSpe = function(spe) {
+# Checks that `spe` is a SummarizedExperiment (which includes SpatialExperiment
+# and SingleCellExperiment).
+checkSpe <- function(spe) {
     if (!methods::is(spe, "SummarizedExperiment")) {
         stop("`spe` must be a SummarizedExperiment, for example a ",
             "SpatialExperiment", call. = FALSE)
@@ -392,141 +85,320 @@ checkSpe = function(spe) {
     invisible(spe)
 }
 
-# checks that `cellSize`, the size of the highlighted cells in a spatial plot,
-# is a single positive number
-checkCellSize = function(cellSize) {
-    if (!is.numeric(cellSize) || length(cellSize) != 1 || is.na(cellSize) ||
-        !is.finite(cellSize) || cellSize <= 0) {
-        stop("`cellSize` must be a single positive number", call. = FALSE)
+# Checks that `value`, the argument called `arg`, is a single string naming a
+# column of x (colData of a SummarizedExperiment, or a data.frame).
+checkColumn <- function(x, value, arg) {
+    where <- if (methods::is(x, "SummarizedExperiment")) {
+        "colData(spe)"
+    } else {
+        "the data"
     }
-    invisible(cellSize)
+    if (!is.character(value) || length(value) != 1 || is.na(value)) {
+        stop("`", arg, "` must be a single string naming a column of ", where,
+            call. = FALSE)
+    }
+    available <- cellDataNames(x)
+    if (!value %in% available) {
+        shown <- paste(utils::head(available, 10), collapse = ", ")
+        stop("`", arg, " = \"", value, "\"` is not a column of ", where,
+            ". Available columns: ", shown,
+            if (length(available) > 10) ", ...", call. = FALSE)
+    }
+    invisible(value)
 }
 
-# checks that `gene`, the argument called `arg`, is a single string naming a row
-# of the count matrix
-checkGene = function(counts, gene, arg, assayName) {
-    if (!is.character(gene) || length(gene) != 1 || is.na(gene)) {
-        stop("`", arg, "` must be a single string naming a gene", call. = FALSE)
+# Checks that `value`, the argument called `arg`, is a single string naming an
+# assay of the SummarizedExperiment `spe`.
+checkAssay <- function(spe, value, arg = "assayName") {
+    if (!is.character(value) || length(value) != 1 || is.na(value)) {
+        stop("`", arg, "` must be a single string naming an assay of spe",
+            call. = FALSE)
     }
-    if (!gene %in% rownames(counts)) {
-        stop("`", arg, " = \"", gene, "\"` is not a gene (a row) of the '",
-            assayName, "' assay", call. = FALSE)
+    available <- SummarizedExperiment::assayNames(spe)
+    if (!value %in% available) {
+        shown <- paste(available, collapse = ", ")
+        stop("`", arg, " = \"", value, "\"` is not an assay of spe. ",
+            "Available assays: ", shown, call. = FALSE)
     }
-    invisible(gene)
+    invisible(value)
 }
 
-# ---- argument checks for the plot functions ----
-
-# the groups of the cell type tree that have cells in the data. Without a tree
-# the `group` column of the data is used.
-groupsInData = function(cells, cellTypeTree = NULL) {
-    if (is.null(cellTypeTree)) {
-        return(unique(as.character(cells$group[!is.na(cells$group)])))
+# Checks that `cores` is a single whole number of at least 1.
+checkCores <- function(cores, arg = "cores") {
+    if (!is.numeric(cores) || length(cores) != 1 || is.na(cores) ||
+        cores < 1 || cores != round(cores)) {
+        stop("`", arg, "` must be a single whole number of at least 1",
+            call. = FALSE)
     }
-    cellMap = buildCellTypeMap(cellTypeTree)$cellMap
-    unique(cellMap$group[cellMap$cellType %in% cells$cellType & !is.na(cellMap$group)])
+    invisible(cores)
 }
 
-# checks that `imageID`, the image to plot, is a single image of the data
-checkImage = function(cells, imageID) {
-    images = unique(as.character(cells$imageID))
-    if (!is.character(imageID) || length(imageID) != 1 || is.na(imageID)) {
-        stop("`imageID` must be a single string", call. = FALSE)
+# Checks that `r` is a non-empty vector of positive, finite radii.
+checkRadii <- function(r, arg = "r") {
+    if (!is.numeric(r) || length(r) == 0 || anyNA(r) || any(!is.finite(r)) ||
+        any(r <= 0)) {
+        stop("`", arg, "` must be a vector of one or more positive numbers ",
+            "(radii)", call. = FALSE)
     }
-    if (!imageID %in% images) {
-        stop("`imageID = \"", imageID, "\"` is not an image in the data. Images: ",
-            paste(utils::head(images, 10), collapse = ", "),
-            if (length(images) > 10) ", ...", call. = FALSE)
-    }
-    invisible(imageID)
+    invisible(r)
 }
 
-# checks that every group the user passed exists in the data. `groups` is a
-# named list: the names are the arguments, the values what the user passed.
-checkGroupsInData = function(cells, cellTypeTree, groups) {
-    available = groupsInData(cells, cellTypeTree)
-    for (arg in names(groups)) {
-        g = groups[[arg]]
-        if (!is.character(g) || length(g) != 1 || is.na(g)) {
-            stop("`", arg, "` must be a single group name", call. = FALSE)
-        }
-        if (!g %in% available) {
-            stop("`", arg, " = \"", g, "\"` is not a group in the data. Groups: ",
-                paste(utils::head(available, 10), collapse = ", "),
-                if (length(available) > 10) ", ...", call. = FALSE)
-        }
+# Outcome and subjects ----
+
+# Checks the per-image outcome that the analyses test against: the column
+# exists, has a single value per image, and has exactly two levels. If
+# `subject` is given, also checks that every image belongs to one subject;
+# without it, says that images are treated as independent.
+checkOutcome <- function(cells, outcomeCol, subject = NULL) {
+    checkColumn(cells, outcomeCol, "outcomeCol")
+    checkColumn(cells, "imageID", "imageID")
+    if (!is.null(subject)) checkSubjects(cells, subject)
+    outcome <- cells[[outcomeCol]]
+
+    # one value per image: each image is one observation
+    perImage <- split(outcome, cells$imageID)
+    valuesPerImage <- lapply(perImage, function(v) unique(v[!is.na(v)]))
+    mixed <- names(valuesPerImage)[lengths(valuesPerImage) > 1]
+    if (length(mixed) > 0) {
+        examples <- paste(vapply(utils::head(mixed, 5), function(id) {
+            sprintf("%s (%s)", id, paste(valuesPerImage[[id]], collapse = ", "))
+        }, character(1)), collapse = "; ")
+        stop("`outcomeCol = \"", outcomeCol, "\"` must have a single value ",
+            "per image, but ", length(mixed), " image",
+            if (length(mixed) > 1) "s", " ",
+            if (length(mixed) > 1) "have" else "has", " more than one: ",
+            examples, if (length(mixed) > 5) "; ...",
+            ". The models treat each image as one observation, so please ",
+            "make sure there is exactly one outcome value per image. Several ",
+            "images from one subject are handled with the `subject` argument.",
+            call. = FALSE)
+    }
+
+    # exactly two conditions
+    levels <- sort(unique(outcome[!is.na(outcome)]))
+    shownLevels <- paste(utils::head(levels, 6), collapse = ", ")
+    if (length(levels) > 2) {
+        stop("`outcomeCol = \"", outcomeCol, "\"` has ", length(levels),
+            " levels (", shownLevels, if (length(levels) > 6) ", ...", "). ",
+            "The models currently compare two conditions only. Please subset ",
+            "the data to two conditions before running.", call. = FALSE)
+    }
+    if (length(levels) < 2) {
+        only <- if (length(levels) == 1) sprintf(" (only %s)", shownLevels)
+        stop("`outcomeCol = \"", outcomeCol, "\"` has fewer than two levels",
+            only, ". Two conditions are needed to compare.", call. = FALSE)
+    }
+    messageIfNoSubject(subject)
+    invisible(levels)
+}
+
+# Checks the `subject` column: no missing values, and every image belongs to a
+# single subject. A subject may have several images; the analyses account for
+# them (spicyR's and lmerTest's mixed models, or pooling).
+checkSubjects <- function(cells, subject) {
+    checkColumn(cells, subject, "subject")
+    checkColumn(cells, "imageID", "imageID")
+    ids <- as.character(cells[[subject]])
+    if (anyNA(ids)) {
+        noSubject <- unique(as.character(cells$imageID)[is.na(ids)])
+        shown <- paste(utils::head(noSubject, 5), collapse = ", ")
+        stop("The `subject` column '", subject, "' has missing values (in ",
+            length(noSubject), " image", if (length(noSubject) > 1) "s", ": ",
+            shown, if (length(noSubject) > 5) ", ...",
+            "). Every cell needs a subject so that images from the same ",
+            "subject can be detected.", call. = FALSE)
+    }
+
+    map <- unique(data.frame(imageID = as.character(cells$imageID),
+        subject = ids))
+    # every image must belong to one subject
+    subjectsPerImage <- split(map$subject, map$imageID)
+    shared <- subjectsPerImage[lengths(subjectsPerImage) > 1]
+    if (length(shared) > 0) {
+        examples <- paste(vapply(utils::head(names(shared), 5), function(img) {
+            sprintf("%s (%s)", img,
+                paste(utils::head(shared[[img]], 4), collapse = ", "))
+        }, character(1)), collapse = "; ")
+        stop("Every image must belong to a single subject, but ",
+            length(shared), " image", if (length(shared) > 1) "s", " ",
+            if (length(shared) > 1) "have" else "has",
+            " more than one value in the `subject` column '", subject, "': ",
+            examples, if (length(shared) > 5) "; ...", ".", call. = FALSE)
     }
     invisible(TRUE)
 }
 
-# checks that every label the user passed is a cell type or a group of the data
-checkLabelsInData = function(cells, cellTypeTree, labels) {
-    available = union(unique(as.character(cells$cellType)),
-        groupsInData(cells, cellTypeTree))
-    for (arg in names(labels)) {
-        l = labels[[arg]]
-        if (!is.character(l) || length(l) != 1 || is.na(l)) {
-            stop("`", arg, "` must be a single cell type or group name", call. = FALSE)
-        }
-        if (!l %in% available) {
-            stop("`", arg, " = \"", l, "\"` is neither a cell type nor a group in ",
-                "the data", call. = FALSE)
-        }
+# One-line note that, without a `subject` column, images from one subject
+# cannot be recognised.
+messageIfNoSubject <- function(subject) {
+    if (is.null(subject)) {
+        message("`subject` was not given, so every image is treated as an ",
+            "independent sample (from a different subject).")
+    }
+    invisible()
+}
+
+# TRUE if `subject` is given and some subject has several images.
+hasRepeatedImages <- function(cells, subject) {
+    if (is.null(subject)) return(FALSE)
+    perImage <- unique(data.frame(imageID = as.character(cells$imageID),
+        subject = as.character(cells[[subject]])))
+    anyDuplicated(perImage$subject) > 0
+}
+
+# Stops with an install hint if lmerTest, needed for the mixed models when
+# subjects have several images, is not installed.
+needLmerTest <- function() {
+    if (!requireNamespace("lmerTest", quietly = TRUE)) {
+        stop("Some subjects have several images, which needs a mixed ",
+            "model from the lmerTest package. Install it with ",
+            "BiocManager::install(\"lmerTest\").", call. = FALSE)
     }
     invisible(TRUE)
 }
 
-# checks that `subtype` (the argument called `arg`) has confidence scores for
-# `group` in confList; the group itself stands for the whole group
-checkSubtype = function(confList, group, subtype, arg) {
-    if (!is.character(subtype) || length(subtype) != 1 || is.na(subtype)) {
-        stop("`", arg, "` must be a single cell type name", call. = FALSE)
+# A linear mixed model of the column `response` of `dat` on the outcome, with
+# a random intercept per subject (`.subject`), fitted with lmerTest::lmer() as
+# spicyR does. Returns the estimate for the second level of the outcome, its t
+# statistic, its Satterthwaite p-value and whether the fit was singular (1) or
+# not (0), or NULL if the model cannot be fitted. lmerTest's "boundary
+# (singular) fit" message is caught and recorded, not printed: the callers
+# summarise it once (see reportSingular()). Other messages and warnings, such
+# as convergence problems, reach the user.
+mixedModelTest <- function(dat, response, outcomeCol) {
+    formula <- stats::as.formula(paste0("`", response, "` ~ `", outcomeCol,
+        "` + (1 | .subject)"))
+    state <- new.env()
+    state$singular <- FALSE
+    fit <- tryCatch(withCallingHandlers(lmerTest::lmer(formula, data = dat),
+        message = function(m) {
+            if (grepl("singular", conditionMessage(m), fixed = TRUE)) {
+                state$singular <- TRUE
+                invokeRestart("muffleMessage")
+            }
+        }), error = function(e) NULL)
+    if (is.null(fit)) return(NULL)
+    coefs <- summary(fit)$coefficients
+    if (nrow(coefs) < 2) return(NULL)
+    c(estimate = coefs[2, "Estimate"], statistic = coefs[2, "t value"],
+        p.value = coefs[2, "Pr(>|t|)"], singular = as.numeric(state$singular))
+}
+
+# Prints one message saying how many of the mixed models in the table `out`
+# (column `singular`, NA where no mixed model was fitted) had a singular fit,
+# and returns the table without that column. `what` names the tests, for
+# example "unweighted cell type proportions".
+reportSingular <- function(out, what) {
+    fitted <- sum(!is.na(out$singular))
+    nSingular <- sum(out$singular == 1, na.rm = TRUE)
+    if (nSingular > 0) {
+        message("Mixed models for the ", what, ": for ", nSingular,
+            " of the ", fitted, " models the between-subject variance was ",
+            "estimated as zero ",
+            "(a singular fit), so those models are equivalent to linear ",
+            "models.")
     }
-    if (identical(group, subtype)) {
-        return(invisible(TRUE))
-    }
-    conf = confList[[group]]
-    if (!is.data.frame(conf)) {
-        stop("`confList` has no confidence scores for the group '", group, "'",
+    out$singular <- NULL
+    out
+}
+
+# Classifier helpers, shared by bootstrapping and cross-fitting ----
+
+# Log1p-normalises and z-scores every row (cell) of a cells x genes count
+# matrix in one vectorised pass. Cells with zero total count come out
+# all-zero.
+scaleCountMat <- function(mat) {
+    totals <- rowSums(mat)
+    norm <- log1p(mat / pmax(totals, 1) * 1e4)
+    norm[totals == 0, ] <- 0
+
+    means <- rowMeans(norm)
+    centred <- norm - means
+    sds <- sqrt(rowSums(centred^2) / (ncol(mat) - 1))
+    sds[sds == 0] <- 1 # avoid dividing by zero for zero-variance rows
+    centred / sds
+}
+
+# TRUE for the columns of a matrix whose values are not all the same.
+varyingColumns <- function(mat) {
+    if (nrow(mat) < 2) return(rep(FALSE, ncol(mat)))
+    colSums(mat != rep(mat[1, ], each = nrow(mat))) > 0
+}
+
+# Checks a cells x genes count matrix and its labels before classification: one
+# label per row, and non-negative counts with no missing values. The resampling
+# treats each cell's total as a number of transcripts, so unless
+# `correctedCounts` is TRUE the counts must also be whole numbers (within a
+# small tolerance for whole numbers stored as doubles).
+checkCountMatrix <- function(countMat, labels, correctedCounts = FALSE) {
+    if (nrow(countMat) != length(labels)) {
+        stop("countMat has ", nrow(countMat), " rows but labels has ",
+            length(labels), " elements; they must match (one row per cell)",
             call. = FALSE)
     }
-    available = setdiff(names(conf), "cellID")
-    if (!subtype %in% available) {
-        stop("`", arg, " = \"", subtype, "\"` is not a subtype of '", group,
-            "' in `confList`. Subtypes: ", paste(available, collapse = ", "),
-            call. = FALSE)
+    invalid <- anyNA(countMat) || any(countMat < 0)
+    if (correctedCounts && invalid) {
+        stop("countMat must contain non-negative counts, with no missing ",
+            "values", call. = FALSE)
+    }
+    if (!correctedCounts &&
+        (invalid || any(abs(countMat - round(countMat)) > 1e-6))) {
+        stop("countMat must contain raw non-negative integer counts, with no ",
+            "missing values. Did you pass normalised or log-transformed data? ",
+            "Counts corrected for ambient RNA, which need not be whole ",
+            "numbers, are accepted with correctedCounts = TRUE.", call. = FALSE)
     }
     invisible(TRUE)
 }
 
-# niche labels for the cells: `niche` (the argument called `arg`) is either a
-# column of the cell data or a vector of niches named by cell ID, such as
-# `nicheWeighted` from runNicheIdentification(); a vector is added to the cells
-# as the column ".niche". Returns the cells and the name of the niche column.
-withNicheColumn = function(cells, niche, arg) {
-    if (is.null(names(niche))) {
-        checkColumn(cells, niche, arg)
-        return(list(cells = cells, col = niche))
+# Checks that every class has at least 2 cells; `reason` says why, and follows
+# "Each class needs at least 2 cells" in the error.
+checkClassSizes <- function(labels, reason) {
+    sizes <- table(labels)
+    tooSmall <- names(sizes)[sizes < 2]
+    if (length(tooSmall) > 0) {
+        details <- paste0("'", tooSmall, "' has ", sizes[tooSmall],
+            collapse = ", ")
+        stop("Each class needs at least 2 cells", reason, ", but ", details,
+            ". Drop or merge these cell types.", call. = FALSE)
     }
-    if (!any(cells$cellID %in% names(niche))) {
-        stop("`", arg, "` must be a column of the data or a vector of niches ",
-            "named by cell ID, with at least some of the cell IDs in `spe`",
-            call. = FALSE)
-    }
-    cells$.niche = unname(niche)[match(cells$cellID, names(niche))]
-    list(cells = cells, col = ".niche")
+    invisible(sizes)
 }
 
-# checks that `niche` is one of the niches in the column `nicheCol`, which the
-# error message calls `label`
-checkNiche = function(cells, niche, nicheCol, label = nicheCol) {
-    niches = sort(unique(as.character(cells[[nicheCol]][!is.na(cells[[nicheCol]])])))
-    if (!is.character(niche) || length(niche) != 1 || is.na(niche)) {
-        stop("`niche` must be a single niche name", call. = FALSE)
+# The count matrix with its genes named by position if they have no names: the
+# logistic fits find their genes by name.
+withGeneNames <- function(countMat) {
+    if (is.null(colnames(countMat))) {
+        colnames(countMat) <- paste0("gene", seq_len(ncol(countMat)))
     }
-    if (!niche %in% niches) {
-        stop("`niche = \"", niche, "\"` is not a niche in `", label, "`. Niches: ",
-            paste(niches, collapse = ", "), call. = FALSE)
+    countMat
+}
+
+# The scaled counts (scaleCountMat()) and the genes that vary across the cells,
+# which are the ones a classifier can use. Stops if no gene varies.
+classifierFeatures <- function(countMat) {
+    scaled <- scaleCountMat(countMat)
+    keep <- varyingColumns(scaled)
+    keep <- keep & !is.na(keep)
+    if (!any(keep)) {
+        stop("Every gene has zero variance across these cells, so there is ",
+            "nothing to classify on. Check that countMat is a cells x genes ",
+            "matrix of counts.", call. = FALSE)
     }
-    invisible(niche)
+    list(scaled = scaled, keep = keep)
+}
+
+# A training sample of the cells `idx` with the same number of cells of each
+# class: as many as the smallest class has, or `nPerClass` if that is more, in
+# which case the smaller classes are drawn with replacement.
+balancedSample <- function(idx, labels, nPerClass) {
+    sizes <- table(labels[idx])
+    targetSize <- max(min(sizes), nPerClass)
+    unlist(lapply(unique(labels[idx]), function(lab) {
+        pool <- idx[labels[idx] == lab]
+        # sample.int() draws positions in the pool: sample() on a single
+        # value k would draw from 1:k instead
+        pool[sample.int(length(pool), size = targetSize,
+            replace = length(pool) < targetSize)]
+    }))
 }

@@ -1,19 +1,27 @@
-# Parallel loops, run as in spicyR and lisaClust.
+# Parallel loops with BiocParallel: forked workers on Linux and macOS, serial on
+# Windows, with each element's random stream set from the session seed.
 
-# A BiocParallel param for `cores` forked workers (serial on Windows). With a
-# `seed`, every element of a loop gets its own random stream, so the results do
-# not depend on the number of cores.
-parallelParam = function(cores = 1, seed = NULL) {
-    BPPARAM = if (cores > 1 && .Platform$OS.type != "windows") BiocParallel::MulticoreParam(cores) else
+# A BiocParallel param for `cores` forked workers (serial on Windows). Its
+# RNGseed is drawn from the session's random stream, so a set.seed() before the
+# calling function makes its results reproducible (BiocParallel does not
+# otherwise follow the session's seed), and every element of a loop gets its
+# own random stream, so the results do not depend on the number of cores.
+parallelParam <- function(cores = 1) {
+    BPPARAM <- if (cores > 1 && .Platform$OS.type != "windows") {
+        BiocParallel::MulticoreParam(cores)
+    } else {
         BiocParallel::SerialParam()
-    if (!is.null(seed)) BiocParallel::bpRNGseed(BPPARAM) = seed
+    }
+    BiocParallel::bpRNGseed(BPPARAM) <- sample.int(.Machine$integer.max, 1L)
     BPPARAM
 }
 
 # The task function and elements of the current parLapply() call, found by
 # forked workers in their copy of this environment.
-parallelEnv = new.env(parent = emptyenv())
-runTask = function(i) parallelEnv$task(parallelEnv$X[[i]])
+parallelEnv <- new.env(parent = emptyenv())
+
+# Runs element i of the current parLapply() call in a worker.
+runTask <- function(i) parallelEnv$task(parallelEnv$X[[i]])
 
 # lapply(X, FUN) over the workers of BPPARAM (from parallelParam()).
 # - The workers are forked once, after the task exists, so they share the
@@ -24,33 +32,36 @@ runTask = function(i) parallelEnv$task(parallelEnv$X[[i]])
 #   slows the workers down many times. The setting is changed in this session
 #   before the workers start, because changing it inside a worker first restarts
 #   every thread.
-# - Tasks are handed out in about eight chunks per worker, so that quick and slow
-#   tasks balance out.
-parLapply = function(X, FUN, BPPARAM) {
-    workers = BiocParallel::bpnworkers(BPPARAM)
+# - Tasks are handed out in about eight chunks per worker, so that quick and
+#   slow tasks balance out.
+parLapply <- function(X, FUN, BPPARAM) {
+    workers <- BiocParallel::bpnworkers(BPPARAM)
     # serially, the param still sets each element's random stream
-    if (workers <= 1L || length(X) <= 1L) return(BiocParallel::bplapply(X, FUN, BPPARAM = BPPARAM))
+    if (workers <= 1L || length(X) <= 1L) {
+        return(BiocParallel::bplapply(X, FUN, BPPARAM = BPPARAM))
+    }
     # only when BLAS has several threads: restoring them after forking restarts
     # every thread, so a single-threaded BLAS is left alone
-    blasThreads = RhpcBLASctl::blas_get_num_procs()
+    blasThreads <- RhpcBLASctl::blas_get_num_procs()
     if (isTRUE(blasThreads > 1L)) {
         RhpcBLASctl::blas_set_num_threads(1L)
         on.exit(RhpcBLASctl::blas_set_num_threads(blasThreads), add = TRUE)
     }
-    # OpenMP likewise: forked workers can hang if this session has used several OpenMP threads
-    ompThreads = RhpcBLASctl::omp_get_max_threads()
+    # OpenMP likewise: forked workers can hang if this session has used
+    # several OpenMP threads
+    ompThreads <- RhpcBLASctl::omp_get_max_threads()
     if (isTRUE(ompThreads > 1L)) {
         RhpcBLASctl::omp_set_num_threads(1L)
         on.exit(RhpcBLASctl::omp_set_num_threads(ompThreads), add = TRUE)
     }
-    BiocParallel::bptasks(BPPARAM) = min(length(X), 8L * workers)
+    BiocParallel::bptasks(BPPARAM) <- min(length(X), 8L * workers)
     assign("task", FUN, envir = parallelEnv)
     assign("X", X, envir = parallelEnv)
     on.exit(rm(list = c("task", "X"), envir = parallelEnv), add = TRUE)
     BiocParallel::bpstart(BPPARAM)
     on.exit(BiocParallel::bpstop(BPPARAM), add = TRUE, after = FALSE)
-    out = BiocParallel::bplapply(seq_along(X), runTask, BPPARAM = BPPARAM)
-    names(out) = names(X)
+    out <- BiocParallel::bplapply(seq_along(X), runTask, BPPARAM = BPPARAM)
+    names(out) <- names(X)
     out
 }
 
@@ -59,8 +70,10 @@ parLapply = function(X, FUN, BPPARAM) {
 # which OpenBLAS's threads (one per core) cost far more than they save: on a
 # 128-core server a 40,000-cell lineage took 609 s with 128 threads and 343 s
 # with one, serially. Workers forked meanwhile inherit the one thread.
-setBlasThreads = function(n) {
-    old = RhpcBLASctl::blas_get_num_procs()
-    if (!identical(as.integer(old), as.integer(n))) RhpcBLASctl::blas_set_num_threads(n)
+setBlasThreads <- function(n) {
+    old <- RhpcBLASctl::blas_get_num_procs()
+    if (!identical(as.integer(old), as.integer(n))) {
+        RhpcBLASctl::blas_set_num_threads(n)
+    }
     old
 }

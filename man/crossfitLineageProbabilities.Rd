@@ -9,7 +9,6 @@ crossfitLineageProbabilities(
   cellTypeTree,
   nFolds = 5,
   nPerClass = 50,
-  seed = 51773,
   classifier = c("pcaLogistic", "logistic", "rf", "lda"),
   ntree = 500,
   priors = c("balanced", "observed"),
@@ -21,23 +20,20 @@ crossfitLineageProbabilities(
 )
 }
 \arguments{
-\item{spe}{A \code{SummarizedExperiment} (e.g. \code{SpatialExperiment}) with a counts
-assay and per-cell cell type labels and unique cell IDs in \code{colData}.}
+\item{spe}{A \code{SummarizedExperiment} (e.g. \code{SpatialExperiment}) with
+an assay of raw counts, and each cell's type label and unique ID in
+\code{colData}.}
 
 \item{cellTypeTree}{A cell type tree, see \link{cellTypeTree}.}
 
-\item{nFolds}{Number of folds. The folds are stratified by cell type, so
-every fold's classifier is trained on every child cell type; each child cell
-type therefore needs at least 2 cells.}
+\item{nFolds}{Number of folds. They are stratified by cell type, so each
+child cell type needs at least 2 cells.}
 
-\item{nPerClass}{Minimum number of training cells per class; classes
-smaller than this are up-sampled with replacement.}
+\item{nPerClass}{Minimum number of training cells per class; classes smaller
+than this are up-sampled with replacement.}
 
-\item{seed}{Random seed, or \code{NULL} for no fixed seed. Each group is
-bootstrapped with \code{seed} plus its position in the list of groups, so every
-group is reproducible independently of the others.}
-
-\item{classifier}{\code{"pcaLogistic"} (the default), \code{"logistic"}, \code{"rf"} or \code{"lda"}, as in
+\item{classifier}{\code{"pcaLogistic"} (the default), \code{"logistic"},
+\code{"rf"} or \code{"lda"}, as in
 \code{\link[=bootstrapClassify]{bootstrapClassify()}}.}
 
 \item{ntree}{Number of trees; only used when \code{classifier = "rf"}.}
@@ -59,22 +55,33 @@ They are returned in the \code{cellID} column of each result.}
 \item{assayName}{Name of the assay with the raw counts.}
 }
 \value{
-A confidence list in the format of \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}},
-with probabilities in place of bootstrap confidences.
+A list with one data frame per group, named by group, in the format
+of \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}: a
+\code{cellID} column, and one column per child cell type with the cell's
+probability of it (each row sums to 1). Groups with no cells, or with only
+one cell type present, are skipped with a message.
 }
 \description{
-An alternative to \code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}: for each group with
-children, a classifier is trained on the group's cells with balanced classes
-and gives each cell the probability of each child cell type. The cells are
-split into \code{nFolds} folds and each fold is scored by a classifier trained on
-the other folds, so no cell is scored by a classifier that saw it. Because
-the classes are balanced in training, the probabilities give every child cell
-type the same prior weight.
+An alternative to
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}: for
+each group, a classifier is trained on the group's cells with balanced
+classes and gives each cell the probability of each child cell type. The
+cells are split into \code{nFolds} folds and each fold is scored by a classifier
+trained on the other folds, so no cell is scored by a classifier that saw it.
+Because the classes are balanced in training, the probabilities give every
+child cell type the same prior weight.
 }
 \examples{
 data(lungSubset)
 data(lungCellTypeTree)
-probList = crossfitLineageProbabilities(lungSubset, lungCellTypeTree,
-    nFolds = 3, seed = 1)
+set.seed(1)
+probList <- crossfitLineageProbabilities(lungSubset, lungCellTypeTree,
+    nFolds = 3)
 head(probList[["Endothelial lineage"]])
+}
+\seealso{
+\code{\link[=bootstrapLineageConfidence]{bootstrapLineageConfidence()}}, the
+bootstrap confidences, which measure how stable each cell's label is when
+its counts are resampled. Either result can be passed as \code{confList} to the
+downstream analyses.
 }

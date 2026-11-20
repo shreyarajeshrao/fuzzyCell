@@ -41,7 +41,7 @@ remotes::install_github("shreyarajeshrao/fuzzyCell",
     repos = BiocManager::repositories())
 ```
 
-fuzzyCell requires R >= 4.5.0. To also build the vignette, add
+fuzzyCell requires R >= 4.6.0. To also build the vignette, add
 `build_vignettes = TRUE`. This needs the [Quarto](https://quarto.org) command
 line tool, the `quarto` R package, and the example data package
 `SpatialDatasets`:
@@ -65,21 +65,23 @@ BiocManager::install("fuzzyCell")
 ```r
 library(fuzzyCell)
 
-# heart transplant Xenium biopsies (downloads the data on first use)
-spe = loadAmancherla("pre")
-data(heartCellTypeTree)
+# a small subset of Xenium lung biopsies, included with the package
+data(lungSubset)
+data(lungCellTypeTree)
 
 # per-cell confidence for each group of related subtypes
-confList = bootstrapLineageConfidence(spe, heartCellTypeTree, nBoot = 50)
+set.seed(1)
+confList = bootstrapLineageConfidence(lungSubset, lungCellTypeTree,
+    nBoot = 50)
 
 # weighted vs unweighted analyses, tested against the outcome
-props = runProportionsPipeline(spe, heartCellTypeTree, confList,
-    outcomeCol = "resolution_broad", subject = "subject")
-coloc = runColocalisationModels(spe, heartCellTypeTree, confList,
-    outcomeCol = "resolution_broad", subject = "subject")
+props = runProportionsPipeline(lungSubset, lungCellTypeTree, confList,
+    outcomeCol = "disease_status", subject = "subject")
+coloc = runColocalisationModels(lungSubset, lungCellTypeTree, confList,
+    outcomeCol = "disease_status", subject = "subject")
 
 # the weights themselves, to pass to spicyR or lisaClust directly
-w = confidenceWeights(spe, heartCellTypeTree, confList)
+w = confidenceWeights(lungSubset, lungCellTypeTree, confList)
 ```
 
 The input is any `SummarizedExperiment` (such as a `SpatialExperiment`) with a
